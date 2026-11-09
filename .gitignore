@@ -1,0 +1,10 @@
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+
+# 本地打包与日志
+*.zip
+*.tar.gz
+*.log
