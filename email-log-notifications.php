@@ -303,10 +303,11 @@ final class Email_Log_Notifications {
             'reply_to'                => 'To',
             'reply_cc'                => 'Cc',
             'reply_bcc'               => 'Bcc',
+            'reply_reset'             => 'Restore defaults',
             'reply_card_hint'         => 'Fills the subject and body of the mailto link behind the viewer\'s email reply button.',
             'reply_subject'           => 'Subject',
             'reply_body'              => 'Body',
-            'reply_hint'              => 'Placeholders (usable in every field): {{name}} name, {{email}} email, {{no}} inquiry no., {{date}} submitted time, {{source}} source. Multiple addresses are comma-separated; leave a field empty to restore its default.',
+            'reply_hint'              => 'Placeholders (usable in every field): {{name}} name, {{email}} email, {{no}} inquiry no., {{date}} submitted time, {{source}} source. Multiple addresses are comma-separated. What you save is what is used - blanks included; "Restore defaults" brings the built-in template back.',
             'detail_time'             => 'Submitted',
             'form_page'        => 'Page form',
             'form_modal'       => 'Popup form',
@@ -427,10 +428,11 @@ final class Email_Log_Notifications {
             'reply_to'                => '收件人',
             'reply_cc'                => '抄送',
             'reply_bcc'               => '密送',
+            'reply_reset'             => '恢复默认',
             'reply_card_hint'         => '询盘弹窗里「邮件回复」按钮的 mailto 主题与正文骨架。',
             'reply_subject'           => '邮件主题',
             'reply_body'              => '邮件正文',
-            'reply_hint'              => '占位符（所有字段通用）：{{name}} 姓名、{{email}} 邮箱、{{no}} 编号、{{date}} 提交时间、{{source}} 来源。多个地址用英文逗号分隔；某输入框留空保存即恢复该处默认。',
+            'reply_hint'              => '占位符（所有字段通用）：{{name}} 姓名、{{email}} 邮箱、{{no}} 编号、{{date}} 提交时间、{{source}} 来源。多个地址用英文逗号分隔。保存即所见——留空也是空白；「恢复默认」可回到内置模板。',
             'detail_time'             => '提交时间',
             'form_page'        => '页面表单',
             'form_modal'       => '弹窗表单',
@@ -551,10 +553,11 @@ final class Email_Log_Notifications {
             'reply_to'                => '收件人',
             'reply_cc'                => '副本',
             'reply_bcc'               => '密件副本',
+            'reply_reset'             => '恢復預設',
             'reply_card_hint'         => '詢盤彈窗裡「郵件回覆」按鈕的 mailto 主題與正文骨架。',
             'reply_subject'           => '郵件主題',
             'reply_body'              => '郵件正文',
-            'reply_hint'              => '佔位符（所有欄位通用）：{{name}} 姓名、{{email}} 郵箱、{{no}} 編號、{{date}} 提交時間、{{source}} 來源。多個地址以英文逗號分隔；某輸入框留空儲存即恢復該處預設。',
+            'reply_hint'              => '佔位符（所有欄位通用）：{{name}} 姓名、{{email}} 郵箱、{{no}} 編號、{{date}} 提交時間、{{source}} 來源。多個地址以英文逗號分隔。儲存即所見——留空也是空白；「恢復預設」可回到內建範本。',
             'detail_time'             => '提交時間',
             'form_page'        => '頁面表單',
             'form_modal'       => '彈窗表單',
@@ -748,6 +751,7 @@ final class Email_Log_Notifications {
         add_action('admin_post_inquiry_reset_template', array(__CLASS__, 'handle_reset_template'));
         add_action('admin_post_inquiry_reply_addlang', array(__CLASS__, 'handle_add_reply_lang'));
         add_action('admin_post_inquiry_reply_dellang', array(__CLASS__, 'handle_delete_reply_lang'));
+        add_action('admin_post_inquiry_reply_reset', array(__CLASS__, 'handle_reply_reset'));
         add_action('admin_enqueue_scripts', array(__CLASS__, 'enqueue_template_assets'));
         // 询盘列表：查看弹窗（AJAX 取正文）与弹窗骨架
         add_action('wp_ajax_eln_inquiry_detail', array(__CLASS__, 'ajax_inquiry_detail'));
@@ -2397,8 +2401,8 @@ HTML;
         }
         ?>
         <style>
-            /* 结构照搬 WP「外观 → 主题详情」的 .theme-wrap，但面板收窄居中（1080×720 封顶）+ 轻遮罩 */
-            .eln-modal{position:fixed;inset:0;z-index:100000;display:none;align-items:center;justify-content:center;padding:40px;background:rgba(0,0,0,.5);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;font-size:13px;line-height:1.5;color:#1d2327;}
+            /* 结构照搬 WP「外观 → 主题详情」，遮罩同 .theme-backdrop：浅灰 90%、不盖左侧菜单和管理栏 */
+            .eln-modal{position:fixed;top:32px;left:160px;right:0;bottom:0;z-index:9990;display:none;align-items:center;justify-content:center;padding:40px;background:rgba(240,240,241,.9);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;font-size:13px;line-height:1.5;color:#1d2327;}
             .eln-modal.is-open{display:flex;}
             .eln-modal__panel{position:relative;width:min(1080px,100%);height:min(720px,100%);display:flex;flex-direction:column;background:#fff;box-shadow:0 1px 20px 5px rgba(0,0,0,.1);}
             .eln-modal__top{position:relative;flex:none;height:48px;border-bottom:1px solid #dcdcde;}
@@ -2437,17 +2441,15 @@ HTML;
             /* 删除：与核心 .delete-theme 一致——默认红字透底，hover 红底白字红边 */
             .eln-modal__delete{color:#b32d2e !important;border:1px solid transparent !important;background:transparent !important;}
             .eln-modal__delete:hover{background:#b32d2e !important;border-color:#b32d2e !important;color:#fff !important;}
+            /* 侧栏收起/窄屏时遮罩左缘贴住菜单 */
+            .folded .eln-modal,.auto-fold .eln-modal{left:36px;}
+            /* 窄屏：遮罩铺满、面板全屏 */
             @media (max-width:782px){
-                .eln-modal__panel{top:0;right:0;bottom:0;left:0;}
-                .eln-modal__wrap{flex-direction:column;overflow:auto;}
-                .eln-modal__main{overflow:visible;padding:16px 16px 24px;}
-                .eln-modal__side{width:auto;max-width:none;border-top:1px solid #dcdcde;}
-            @media (max-width:782px){
-                .eln-modal{padding:0;}
+                .eln-modal{left:0;top:0;padding:0;}
                 .eln-modal__panel{width:100%;height:100%;}
                 .eln-modal__wrap{flex-direction:column;overflow:auto;}
                 .eln-modal__main{overflow:visible;padding:16px 16px 24px;}
-                .eln-modal__side{width:auto;border-left:0;border-top:1px solid #dcdcde;}
+                .eln-modal__side{width:auto;max-width:none;border-left:0;border-top:1px solid #dcdcde;}
             }
         </style>
         <div id="eln-modal" class="eln-modal" role="dialog" aria-modal="true"
@@ -2461,7 +2463,7 @@ HTML;
              data-reply-subject="<?php echo esc_attr(self::reply_tpl()['subject']); ?>"
              data-reply-body="<?php echo esc_attr(self::reply_tpl()['body']); ?>"
              data-confirm-delete="<?php echo esc_attr(self::t('confirm_delete')); ?>">
-            <div class="eln-modal__panel">
+            <div class="eln-modal__panel" data-elnver="r27">
             <div class="eln-modal__top">
                 <div class="eln-modal__nav">
                     <button type="button" class="eln-modal__arrow eln-modal__prev" aria-label="<?php echo esc_attr(self::t('modal_prev')); ?>" disabled>
@@ -2569,8 +2571,8 @@ HTML;
                             return ctx[k] || '';
                         });
                     };
-                    // to 留空时兜底访客邮箱；cc/bcc/subject/body 非空才进 query
-                    var to = fill(modal.getAttribute('data-reply-to')) || d.email;
+                    // to 也以模板为准（可为空，mailto:?… 合法）；cc/bcc/subject/body 非空才进 query
+                    var to = fill(modal.getAttribute('data-reply-to'));
                     var parts = [];
                     var cc = fill(modal.getAttribute('data-reply-cc'));
                     var bcc = fill(modal.getAttribute('data-reply-bcc'));
@@ -2868,9 +2870,9 @@ HTML;
             'default'           => array(),
         ));
         register_setting('eln_reply_group', self::OPT_REPLY, array(
-            'type'              => 'array',
+            // 不要注册 default：一旦注册，get_option 在 option 不存在时会返回注册的空数组，
+            // reply_tpl 就无法区分「从未保存过（该显示默认）」和「保存了空白（该保持空白）」
             'sanitize_callback' => array(__CLASS__, 'sanitize_reply'),
-            'default'           => array(),
         ));
     }
 
@@ -2886,15 +2888,16 @@ HTML;
         );
     }
 
-    /** 人工回信模板：某字段为空（或整体为空串）时该字段用默认 */
+    /** 人工回信模板：从未保存过 → 显示内置默认；保存过 → 原样尊重（包括留空） */
     public static function reply_tpl(): array {
-        $tpl = (array) get_option(self::OPT_REPLY, array());
-        $default = self::reply_template_default();
-        $out = array();
-        foreach ($default as $key => $def) {
-            $out[$key] = trim((string) ($tpl[$key] ?? '')) !== '' ? (string) $tpl[$key] : $def;
+        $tpl = get_option(self::OPT_REPLY);
+        global $wpdb;
+        $raw = $wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", self::OPT_REPLY));
+        file_put_contents('E:/01-DigitalHub/Repositories/WordPress/wp-content/plugins/email-log-notifications/_replytpl.log', date('H:i:s') . ' get_opt=' . wp_json_encode($tpl) . ' is_arr=' . var_export(is_array($tpl), true) . ' raw_row=' . var_export($raw, true) . "\n", FILE_APPEND);
+        if (!is_array($tpl)) {
+            return self::reply_template_default();
         }
-        return $out;
+        return $tpl + array('to' => '', 'cc' => '', 'bcc' => '', 'subject' => '', 'body' => '');
     }
 
     /** 回复模板默认值（mailto 正文是纯文本，不认 HTML；to 留空占位符则回退访客邮箱） */
@@ -2906,6 +2909,19 @@ HTML;
             'subject' => 'Re: {{no}}',
             'body'    => "Dear {{name}},\n\nThank you for your inquiry (No. {{no}}, submitted {{date}}).\n\n\n\nBest regards,",
         );
+    }
+
+    /** 回复模板「恢复默认」：直接删 option，回到内置默认 */
+    public static function handle_reply_reset(): void {
+        if (!current_user_can('manage_options')) {
+            wp_die(esc_html(self::t('invalid_request')));
+        }
+        check_admin_referer('inquiry_reply_reset');
+        delete_option(self::OPT_REPLY);
+        wp_safe_redirect(add_query_arg(
+            array('kind' => 'reply', 'inquiry_reply_reset' => 1),
+            admin_url('edit.php?post_type=' . self::POST_TYPE . '&page=' . self::TPL_SLUG)
+        ));
     }
 
     /** 「询盘通知」保存时的清洗 */
@@ -3097,6 +3113,8 @@ HTML;
                     . esc_html(self::t($ok ? 'tpl_test_ok' : 'tpl_test_fail')) . '</p></div>';
         } elseif (isset($_GET['inquiry_reset'])) {
             $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html(self::t('tpl_reset_done')) . '</p></div>';
+        } elseif (isset($_GET['inquiry_reply_reset'])) {
+            $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html(self::t('tpl_reset_done')) . '</p></div>';
         } elseif (isset($_GET['inquiry_lang_added'])) {
             $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html(self::t('tpl_lang_added')) . '</p></div>';
         } elseif (isset($_GET['inquiry_lang_deleted'])) {
@@ -3247,15 +3265,21 @@ HTML;
             <p class="si-tpl-lede"><?php echo esc_html(self::t('tpl_intro')); ?></p>
 
             <?php if ($kind === 'reply') : ?>
-                <?php // 「邮件回复」标签：mailto 的主题/正文骨架，弹窗「邮件回复」按钮据此生成链接；输入框直接显示生效中的模板（含默认值） ?>
+                <?php // 「邮件回复」标签：mailto 的 to/cc/bcc/主题/正文骨架；保存空白就是空白，「恢复默认」才回内置模板
+                $reply_reset = wp_nonce_url(admin_url('admin-post.php?action=inquiry_reply_reset'), 'inquiry_reply_reset'); ?>
                 <div class="si-tpl-card">
-                    <div class="si-tpl-card__head">
+                    <div class="si-tpl-card__head" data-elnver="r27">
                         <h2><?php echo esc_html(self::t('reply_menu')); ?></h2>
-                        <span class="description"><?php echo esc_html(self::t('reply_card_hint')); ?></span>
+                        <div class="si-tpl-card__actions">
+                            <span class="description"><?php echo esc_html(self::t('reply_card_hint')); ?></span>
+                            <a class="button" href="<?php echo esc_url($reply_reset); ?>"
+                               title="<?php echo esc_attr(self::t('reply_reset')); ?>"
+                               onclick="return confirm('<?php echo esc_js(self::t('reply_reset')); ?>?');"><?php echo esc_html(self::t('reply_reset')); ?></a>
+                        </div>
                     </div>
                     <form method="post" action="options.php" class="si-tpl-card__body">
                         <?php settings_fields('eln_reply_group'); ?>
-                        <?php $reply_tpl = self::reply_tpl(); ?>
+                        <?php $reply_tpl = self::reply_tpl(); $rm = new ReflectionMethod(self::class, 'reply_tpl'); ?><!-- DBG2 file=<?php echo esc_html($rm->getFileName()); ?>:<?php echo (int) $rm->getStartLine(); ?> tpl=<?php echo esc_html(wp_json_encode($reply_tpl)); ?> opt=<?php echo esc_html(wp_json_encode(get_option(self::OPT_REPLY, '(absent)'))); ?> -->
                         <div class="si-tpl-row">
                             <div class="si-tpl-field si-tpl-field--grow">
                                 <label for="eln-reply-to"><?php echo esc_html(self::t('reply_to')); ?></label>
