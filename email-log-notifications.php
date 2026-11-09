@@ -293,6 +293,9 @@ final class Email_Log_Notifications {
             'modal_loading'           => 'Loading…',
             'modal_error'             => 'Could not load this inquiry.',
             'modal_hint'              => 'Inquiry details',
+            'modal_prev'              => 'Previous inquiry',
+            'modal_next'              => 'Next inquiry',
+            'detail_time'             => 'Submitted',
             'form_page'        => 'Page form',
             'form_modal'       => 'Popup form',
             'email_subject'    => 'New inquiry from %s',
@@ -404,6 +407,9 @@ final class Email_Log_Notifications {
             'modal_loading'           => '加载中…',
             'modal_error'             => '加载失败，请重试。',
             'modal_hint'              => '询盘内容',
+            'modal_prev'              => '上一条询盘',
+            'modal_next'              => '下一条询盘',
+            'detail_time'             => '提交时间',
             'form_page'        => '页面表单',
             'form_modal'       => '弹窗表单',
             'email_subject'    => '收到新询盘：%s',
@@ -515,6 +521,9 @@ final class Email_Log_Notifications {
             'modal_loading'           => '載入中…',
             'modal_error'             => '載入失敗，請重試。',
             'modal_hint'              => '詢盤內容',
+            'modal_prev'              => '上一條詢盤',
+            'modal_next'              => '下一條詢盤',
+            'detail_time'             => '提交時間',
             'form_page'        => '頁面表單',
             'form_modal'       => '彈窗表單',
             'email_subject'    => '收到新詢盤：%s',
@@ -2089,7 +2098,7 @@ HTML;
                 break;
             case 'inquiry_email':
                 $email = get_post_meta($post_id, 'inquiry_email', true);
-                echo $email ? '<a href="mailto:' . esc_attr($email) . '">' . esc_html($email) . '</a>' : '—';
+                echo $email ? '<span style="color:#50575e;">' . esc_html($email) . '</span>' : '—';
                 break;
             case 'inquiry_source':
                 echo esc_html(self::record_source_label($post_id));
@@ -2140,27 +2149,20 @@ HTML;
         );
         $title = $summary . "\n" . implode("\n", $lines);
 
-        // 每行的渐变/裁剪 id 必须唯一，否则同一列表页会串色
-        $grad = 'eln-mail-grad-' . $post_id;
-        $clip = 'eln-mail-clip-' . $post_id;
-        $accent = '#04979e';
+        // 扁平风：纯色 + 等宽描边，无渐变无高光；0=灰描边空心 / 1=半圆填充 / 2=整圆填充
+        $ink   = '#00a32a'; // WP 成功绿，扁平纯色
+        $track = '#c3c4c7';
+        $r     = 7.5;
 
-        $svg  = '<svg class="eln-mail-dot" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" focusable="false">';
-        $svg .= '<defs>'
-              . '<linearGradient id="' . $grad . '" x1="0" y1="0" x2="0" y2="1">'
-              . '<stop offset="0" stop-color="#5bc6cb"/><stop offset="1" stop-color="#067c83"/>'
-              . '</linearGradient>'
-              . '<clipPath id="' . $clip . '"><circle cx="10" cy="10" r="7"/></clipPath>'
-              . '</defs>';
-        $svg .= '<circle cx="10" cy="10" r="8.25" fill="#fff"/>';
+        $svg  = '<svg class="eln-mail-dot" width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" focusable="false">';
         if ($sent === 2) {
-            $svg .= '<circle cx="10" cy="10" r="7" fill="url(#' . $grad . ')"/>';
-            $svg .= '<circle cx="7.4" cy="7" r="1.6" fill="#fff" opacity=".22"/>';
+            $svg .= '<circle cx="10" cy="10" r="' . $r . '" fill="' . $ink . '"/>';
         } elseif ($sent === 1) {
-            $svg .= '<rect x="2" y="10" width="16" height="8" fill="url(#' . $grad . ')" clip-path="url(#' . $clip . ')"/>';
+            $svg .= '<path d="M10 ' . (10 - $r) . ' A' . $r . ' ' . $r . ' 0 0 0 10 ' . (10 + $r) . ' Z" fill="' . $ink . '"/>';
+            $svg .= '<circle cx="10" cy="10" r="' . $r . '" fill="none" stroke="' . $ink . '" stroke-width="2"/>';
+        } else {
+            $svg .= '<circle cx="10" cy="10" r="' . $r . '" fill="none" stroke="' . $track . '" stroke-width="2"/>';
         }
-        $svg .= '<circle cx="10" cy="10" r="8.25" fill="none" stroke="'
-              . ($sent === 0 ? '#c3c4c7' : $accent) . '" stroke-width="1.5"/>';
         $svg .= '</svg>';
 
         return '<span class="eln-mail-status" title="' . esc_attr($title)
@@ -2338,11 +2340,20 @@ HTML;
             wp_send_json_error(array('message' => 'not found'), 404);
         }
 
+        $notify = (string) get_post_meta($id, 'inquiry_mail_sent', true);
+        $reply  = (string) get_post_meta($id, 'inquiry_autoreply_sent', true);
+        $sent   = (int) ($notify === 'yes') + (int) ($reply === 'yes');
+        $state  = $sent === 2 ? 'all' : ($sent === 1 ? 'partial' : 'none');
+
         wp_send_json_success(array(
-            'no'    => (string) get_post_meta($id, 'inquiry_no', true),
-            'title' => get_the_title($post),
-            'date'  => get_the_date('Y-m-d H:i', $post),
-            'html'  => wp_kses_post($post->post_content),
+            'no'     => (string) get_post_meta($id, 'inquiry_no', true),
+            'title'  => get_the_title($post),
+            'date'   => get_the_date('Y-m-d H:i', $post),
+            'email'  => (string) get_post_meta($id, 'inquiry_email', true),
+            'source' => self::record_source_label($id),
+            'state'  => $state, // all | partial | none
+            'status' => self::t('status_' . $state),
+            'html'   => wp_kses_post($post->post_content),
         ));
     }
 
@@ -2354,73 +2365,168 @@ HTML;
         }
         ?>
         <style>
-            .eln-modal{position:fixed;inset:0;z-index:100000;display:none;align-items:flex-start;justify-content:center;padding:5vh 16px;background:rgba(20,25,30,.72);}
+            /* 参考 WP「外观 → 主题详情」：全屏白底、左侧大预览、右侧信息栏、顶部箭头翻阅 */
+            .eln-modal{position:fixed;inset:0;z-index:100000;display:none;flex-direction:column;background:#fff;}
             .eln-modal.is-open{display:flex;}
-            .eln-modal__panel{width:min(880px,100%);max-height:90vh;display:flex;flex-direction:column;overflow:hidden;background:#fff;border-radius:6px;box-shadow:0 24px 70px rgba(0,0,0,.4);}
-            .eln-modal__head{display:flex;align-items:center;gap:14px;flex:none;padding:16px 22px;border-bottom:1px solid #dcdcde;}
-            .eln-modal__title{margin:0;font-size:18px;font-weight:600;line-height:1.4;}
-            .eln-modal__meta{margin-left:auto;color:#646970;font-size:12px;white-space:nowrap;}
-            .eln-modal__head .eln-modal__close{border:0;background:transparent;color:#646970;cursor:pointer;font-size:24px;line-height:1;padding:4px 8px;border-radius:4px;}
-            .eln-modal__head .eln-modal__close:hover{background:#f0f0f1;color:#1d2327;}
-            .eln-modal__body{flex:1;overflow:auto;padding:22px;background:#f6f7f7;}
-            .eln-modal__body>*{max-width:760px;margin:0 auto;}
-            .eln-modal__loading{text-align:center;color:#646970;padding:48px 0;}
-            .eln-modal__foot{display:flex;justify-content:flex-end;flex:none;padding:12px 22px;border-top:1px solid #dcdcde;}
+            .eln-modal__top{display:flex;align-items:center;flex:none;height:48px;}
+            .eln-modal__nav{display:flex;}
+            .eln-modal__arrow{display:flex;align-items:center;justify-content:center;width:48px;height:48px;border:0;background:transparent;color:#2c3338;cursor:pointer;}
+            .eln-modal__arrow svg{display:block;fill:none;stroke:#2c3338;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;}
+            .eln-modal__arrow:hover:not(:disabled){background:#f0f0f1;color:#1d2327;}
+            .eln-modal__arrow:hover:not(:disabled) svg{stroke:#1d2327;}
+            .eln-modal__arrow:disabled{color:#c3c4c7;cursor:default;}
+            .eln-modal__arrow:disabled svg{stroke:#c3c4c7;}
+            .eln-modal__top .eln-modal__close{margin-left:auto;border:0;background:transparent;color:#646970;cursor:pointer;font-size:24px;line-height:1;padding:4px 16px;height:48px;}
+            .eln-modal__top .eln-modal__close:hover{background:#f0f0f1;color:#1d2327;}
+            .eln-modal__wrap{display:flex;flex:1;min-height:0;}
+            .eln-modal__main{flex:1;min-width:0;overflow:auto;padding:32px 40px;background:#fff;}
+            .eln-modal__stage{max-width:760px;margin:0 auto;border:1px solid #dcdcde;background:#fff;box-shadow:0 1px 8px rgba(0,0,0,.07);}
+            .eln-modal__stage>*{display:block;padding:28px 32px;}
+            .eln-modal__loading{text-align:center;color:#646970;padding:64px 0;border:0;box-shadow:none;}
+            .eln-modal__side{flex:none;width:320px;overflow:auto;padding:4px 24px 24px;border-left:1px solid #f0f0f1;}
+            .eln-modal__chip{display:inline-block;margin:16px 0 0;padding:2px 8px;border-radius:3px;font-size:12px;line-height:1.6;}
+            .eln-modal__chip.is-all{background:#edfaef;color:#00a32a;}
+            .eln-modal__chip.is-partial{background:#fcf9e8;color:#996800;}
+            .eln-modal__chip.is-none{background:#f0f0f1;color:#787c82;}
+            .eln-modal__title{margin:10px 0 2px;font-size:23px;font-weight:400;line-height:1.35;}
+            .eln-modal__no{margin:0 0 14px;color:#646970;font-family:Consolas,Monaco,monospace;font-size:12px;}
+            .eln-modal__fields{margin:0;}
+            .eln-modal__fields dt{margin:14px 0 2px;color:#646970;font-size:12px;}
+            .eln-modal__fields dd{margin:0;font-size:13px;word-break:break-all;}
+            .eln-modal__foot{display:flex;justify-content:flex-end;flex:none;padding:14px 24px;border-top:1px solid #dcdcde;}
+            @media (max-width:960px){
+                .eln-modal__wrap{flex-direction:column;overflow:auto;}
+                .eln-modal__main{overflow:visible;padding:16px 16px 24px;}
+                .eln-modal__side{width:auto;border-left:0;padding-top:0;}
+            }
         </style>
         <div id="eln-modal" class="eln-modal" role="dialog" aria-modal="true"
              aria-label="<?php echo esc_attr(self::t('modal_hint')); ?>"
              data-nonce="<?php echo esc_attr(wp_create_nonce('eln_inquiry_detail')); ?>"
              data-loading="<?php echo esc_attr(self::t('modal_loading')); ?>"
              data-error="<?php echo esc_attr(self::t('modal_error')); ?>">
-            <div class="eln-modal__panel">
-                <div class="eln-modal__head">
+            <div class="eln-modal__top">
+                <div class="eln-modal__nav">
+                    <button type="button" class="eln-modal__arrow eln-modal__prev" aria-label="<?php echo esc_attr(self::t('modal_prev')); ?>" disabled>
+                        <svg width="20" height="20" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>
+                    </button>
+                    <button type="button" class="eln-modal__arrow eln-modal__next" aria-label="<?php echo esc_attr(self::t('modal_next')); ?>" disabled>
+                        <svg width="20" height="20" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+                    </button>
+                </div>
+                <button type="button" class="eln-modal__close" aria-label="<?php echo esc_attr(self::t('modal_close')); ?>">&times;</button>
+            </div>
+            <div class="eln-modal__wrap">
+                <div class="eln-modal__main">
+                    <div class="eln-modal__stage"></div>
+                </div>
+                <aside class="eln-modal__side">
+                    <span class="eln-modal__chip" hidden></span>
                     <h2 class="eln-modal__title"></h2>
-                    <span class="eln-modal__meta"></span>
-                    <button type="button" class="eln-modal__close" aria-label="<?php echo esc_attr(self::t('modal_close')); ?>">&times;</button>
-                </div>
-                <div class="eln-modal__body"></div>
-                <div class="eln-modal__foot">
-                    <button type="button" class="button eln-modal__close"><?php echo esc_html(self::t('modal_close')); ?></button>
-                </div>
+                    <p class="eln-modal__no"></p>
+                    <dl class="eln-modal__fields">
+                        <dt><?php echo esc_html(self::t('col_email')); ?></dt>
+                        <dd class="eln-modal__email"></dd>
+                        <dt><?php echo esc_html(self::t('col_source')); ?></dt>
+                        <dd class="eln-modal__source"></dd>
+                        <dt><?php echo esc_html(self::t('detail_time')); ?></dt>
+                        <dd class="eln-modal__date"></dd>
+                        <dt><?php echo esc_html(self::t('col_mail')); ?></dt>
+                        <dd class="eln-modal__status"></dd>
+                    </dl>
+                </aside>
+            </div>
+            <div class="eln-modal__foot">
+                <button type="button" class="button eln-modal__close"><?php echo esc_html(self::t('modal_close')); ?></button>
             </div>
         </div>
         <script>
         (function () {
             var modal = document.getElementById('eln-modal');
             if (!modal) { return; }
-            var head   = modal.querySelector('.eln-modal__head');
+            var stage  = modal.querySelector('.eln-modal__stage');
+            var chip   = modal.querySelector('.eln-modal__chip');
             var title  = modal.querySelector('.eln-modal__title');
-            var meta   = modal.querySelector('.eln-modal__meta');
-            var body   = modal.querySelector('.eln-modal__body');
+            var noEl   = modal.querySelector('.eln-modal__no');
+            var email  = modal.querySelector('.eln-modal__email');
+            var source = modal.querySelector('.eln-modal__source');
+            var dateEl = modal.querySelector('.eln-modal__date');
+            var status = modal.querySelector('.eln-modal__status');
+            var prevB  = modal.querySelector('.eln-modal__prev');
+            var nextB  = modal.querySelector('.eln-modal__next');
             var closers = modal.querySelectorAll('.eln-modal__close');
+            var ids = [];
+            var current = -1;
             var lastFocus = null;
 
             function loading(text) {
-                body.innerHTML = '<p class="eln-modal__loading"></p>';
-                body.firstChild.textContent = text;
+                stage.innerHTML = '<p class="eln-modal__loading"></p>';
+                stage.firstChild.textContent = text;
             }
-            function open(id) {
-                lastFocus = document.activeElement;
-                modal.classList.add('is-open');
-                document.body.style.overflow = 'hidden';
-                title.textContent = '';
-                meta.textContent = '';
+            function syncNav() {
+                prevB.disabled = current <= 0;
+                nextB.disabled = current === -1 || current >= ids.length - 1;
+            }
+            function fetch(id) {
                 loading(modal.getAttribute('data-loading'));
-                head.querySelector('.eln-modal__close').focus();
-
                 var url = ajaxurl + '?action=eln_inquiry_detail&id=' + encodeURIComponent(id)
                         + '&nonce=' + encodeURIComponent(modal.getAttribute('data-nonce'));
-                fetch(url, { credentials: 'same-origin' })
+                fetchAbort();
+                request = new AbortController();
+                return window.fetch(url, { credentials: 'same-origin', signal: request.signal })
                     .then(function (r) { return r.json(); })
                     .then(function (j) {
                         if (!j || !j.success) { throw new Error('failed'); }
-                        title.textContent = j.data.title || '';
-                        meta.textContent = (j.data.no ? '#' + j.data.no + ' \u00b7 ' : '') + (j.data.date || '');
-                        body.innerHTML = j.data.html || '';
-                    })
-                    .catch(function () { loading(modal.getAttribute('data-error')); });
+                        return j.data;
+                    });
+            }
+            var request = null;
+            function fetchAbort() {
+                if (request) { request.abort(); }
+            }
+            function render(d) {
+                stage.innerHTML = d.html || '';
+                title.textContent = d.title || '';
+                noEl.textContent = d.no ? 'No. ' + d.no : '';
+                email.textContent = d.email || '\u2014';
+                source.textContent = d.source || '\u2014';
+                dateEl.textContent = d.date || '\u2014';
+                status.textContent = d.status || '\u2014';
+                chip.hidden = !(d.state && d.status);
+                chip.textContent = d.status || '';
+                chip.className = 'eln-modal__chip' + (d.state ? ' is-' + d.state : '');
+            }
+            function show(pos) {
+                if (pos < 0 || pos >= ids.length) { return; }
+                current = pos;
+                syncNav();
+                fetch(ids[current]).then(function (d) {
+                    if (ids[current] !== ids[pos]) { return; } // 已翻到别条
+                    render(d);
+                }).catch(function (err) {
+                    if (err && err.name === 'AbortError') { return; }
+                    loading(modal.getAttribute('data-error'));
+                });
+            }
+            function open(id) {
+                var links = document.querySelectorAll('.eln-open[data-id]');
+                ids = [];
+                for (var i = 0; i < links.length; i++) {
+                    var v = links[i].getAttribute('data-id');
+                    if (ids.indexOf(v) === -1) { ids.push(v); }
+                }
+                lastFocus = document.activeElement;
+                modal.classList.add('is-open');
+                document.body.style.overflow = 'hidden';
+                title.textContent = ''; noEl.textContent = '';
+                email.textContent = ''; source.textContent = '';
+                dateEl.textContent = ''; status.textContent = '';
+                chip.hidden = true;
+                closers[0].focus();
+                show(Math.max(0, ids.indexOf(String(id))));
             }
             function close() {
+                fetchAbort();
                 modal.classList.remove('is-open');
                 document.body.style.overflow = '';
                 if (lastFocus && lastFocus.focus) { lastFocus.focus(); }
@@ -2431,13 +2537,17 @@ HTML;
                 if (link) {
                     e.preventDefault();
                     open(link.getAttribute('data-id'));
-                } else if (e.target === modal) {
-                    close();
                 }
             });
+            prevB.addEventListener('click', function () { show(current - 1); });
+            nextB.addEventListener('click', function () { show(current + 1); });
             Array.prototype.forEach.call(closers, function (b) { b.addEventListener('click', close); });
+            modal.addEventListener('click', function (e) { if (e.target === modal) { close(); } });
             document.addEventListener('keydown', function (e) {
-                if (e.key === 'Escape' && modal.classList.contains('is-open')) { close(); }
+                if (!modal.classList.contains('is-open')) { return; }
+                if (e.key === 'Escape') { close(); }
+                else if (e.key === 'ArrowLeft') { show(current - 1); }
+                else if (e.key === 'ArrowRight') { show(current + 1); }
             });
 
             // 仪表盘点名字跳过来：带 eln_view=<id> 自动打开同一弹窗
