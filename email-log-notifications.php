@@ -62,11 +62,15 @@ final class Email_Log_Notifications {
     const POST_TYPE      = 'inquiry';
     const VIEW_SLUG      = 'inquiry-view';
     const TPL_SLUG       = 'inquiry-template';
+    /** 回信模板设置页 slug */
+    const REPLY_SLUG     = 'inquiry-reply';
     const HONEYPOT       = 'companyWebsite';
     /** 邮件模板设置存在这个 option 里 */
     const OPT_TEMPLATE   = 'eln_template';
     /** 自动确认模板（含开关 + 语言组） */
     const OPT_AUTOREPLY  = 'eln_autoreply';
+    /** 人工回信模板（mailto 的主题/正文骨架，弹窗「回信」按钮用） */
+    const OPT_REPLY      = 'eln_reply';
     /** 历史询盘补编号的一次性开关（inquiry_no 是后加的 meta） */
     const OPT_BACKFILL   = 'eln_numbers_backfilled';
 
@@ -296,6 +300,10 @@ final class Email_Log_Notifications {
             'modal_prev'              => 'Previous inquiry',
             'modal_next'              => 'Next inquiry',
             'modal_reply'             => 'Reply',
+            'reply_menu'              => 'Reply Template',
+            'reply_subject'           => 'Subject',
+            'reply_body'              => 'Body',
+            'reply_hint'              => 'Placeholders: {{name}} name, {{email}} email, {{no}} inquiry no., {{date}} submitted time, {{source}} source. Save empty to restore the defaults.',
             'detail_time'             => 'Submitted',
             'form_page'        => 'Page form',
             'form_modal'       => 'Popup form',
@@ -411,6 +419,10 @@ final class Email_Log_Notifications {
             'modal_prev'              => '上一条询盘',
             'modal_next'              => '下一条询盘',
             'modal_reply'             => '回信',
+            'reply_menu'              => '回信模板',
+            'reply_subject'           => '邮件主题',
+            'reply_body'              => '邮件正文',
+            'reply_hint'              => '可用占位符：{{name}} 姓名、{{email}} 邮箱、{{no}} 编号、{{date}} 提交时间、{{source}} 来源。全部留空保存即恢复默认。',
             'detail_time'             => '提交时间',
             'form_page'        => '页面表单',
             'form_modal'       => '弹窗表单',
@@ -526,6 +538,10 @@ final class Email_Log_Notifications {
             'modal_prev'              => '上一條詢盤',
             'modal_next'              => '下一條詢盤',
             'modal_reply'             => '回覆',
+            'reply_menu'              => '回覆範本',
+            'reply_subject'           => '郵件主題',
+            'reply_body'              => '郵件正文',
+            'reply_hint'              => '可用佔位符：{{name}} 姓名、{{email}} 郵箱、{{no}} 編號、{{date}} 提交時間、{{source}} 來源。全部留空儲存即恢復預設。',
             'detail_time'             => '提交時間',
             'form_page'        => '頁面表單',
             'form_modal'       => '彈窗表單',
@@ -2418,8 +2434,7 @@ HTML;
             .eln-modal__fields dt{margin:14px 0 2px;color:#646970;font-size:12px;}
             .eln-modal__fields dd{margin:0;font-size:13px;word-break:break-word;}
             .eln-modal__fields dd .eln-mail-item{display:block;}
-            .eln-modal__reply{display:inline-block;margin-top:20px;}
-            .eln-modal__foot{display:flex;justify-content:flex-end;flex:none;padding:12px 24px;border-top:1px solid #dcdcde;background:#fff;}
+            .eln-modal__foot{display:flex;justify-content:space-between;flex:none;padding:12px 24px;border-top:1px solid #dcdcde;background:#fff;}
             @media (max-width:782px){
                 .eln-modal{padding:0;}
                 .eln-modal__panel{width:100%;height:100%;}
@@ -2432,7 +2447,9 @@ HTML;
              aria-label="<?php echo esc_attr(self::t('modal_hint')); ?>"
              data-nonce="<?php echo esc_attr(wp_create_nonce('eln_inquiry_detail')); ?>"
              data-loading="<?php echo esc_attr(self::t('modal_loading')); ?>"
-             data-error="<?php echo esc_attr(self::t('modal_error')); ?>">
+             data-error="<?php echo esc_attr(self::t('modal_error')); ?>"
+             data-reply-subject="<?php echo esc_attr(self::reply_tpl()['subject']); ?>"
+             data-reply-body="<?php echo esc_attr(self::reply_tpl()['body']); ?>">
             <div class="eln-modal__panel">
             <div class="eln-modal__top">
                 <div class="eln-modal__nav">
@@ -2464,11 +2481,10 @@ HTML;
                         <dt><?php echo esc_html(self::t('detail_time')); ?></dt>
                         <dd class="eln-modal__date"></dd>
                     </dl>
-                    <a class="button eln-modal__reply" hidden
-                       aria-label="<?php echo esc_attr(self::t('modal_reply')); ?>"><?php echo esc_html(self::t('modal_reply')); ?></a>
                 </aside>
             </div>
             <div class="eln-modal__foot">
+                <a class="button eln-modal__reply" hidden><?php echo esc_html(self::t('modal_reply')); ?></a>
                 <button type="button" class="button eln-modal__close"><?php echo esc_html(self::t('modal_close')); ?></button>
             </div>
             </div>
@@ -2529,9 +2545,22 @@ HTML;
                 chip.hidden = !(d.state && d.status);
                 chip.textContent = d.status || '';
                 chip.className = 'eln-modal__chip' + (d.state ? ' is-' + d.state : '');
+                // 回信 = mailto：主题/正文骨架取自「回信模板」设置，占位符按本条记录填充
                 reply.hidden = !d.email;
                 if (d.email) {
-                    reply.href = 'mailto:' + d.email + '?subject=' + encodeURIComponent('Re: ' + (d.no ? d.no + ' ' : '') + (d.title || ''));
+                    var ctx = {
+                        name: d.title || '', email: d.email || '',
+                        no: d.no || '', date: d.date || '', source: d.source || ''
+                    };
+                    var fill = function (s) {
+                        return (s || '').replace(/\{\{(\w+)\}\}/g, function (_, k) {
+                            return ctx[k] || '';
+                        });
+                    };
+                    var href = 'mailto:' + d.email + '?subject=' + encodeURIComponent(fill(modal.getAttribute('data-reply-subject')));
+                    var body = fill(modal.getAttribute('data-reply-body'));
+                    if (body) { href += '&body=' + encodeURIComponent(body); }
+                    reply.href = href;
                 }
             }
             function show(pos) {
@@ -2774,6 +2803,14 @@ HTML;
             self::TPL_SLUG,
             array(__CLASS__, 'render_template_page')
         );
+        add_submenu_page(
+            'edit.php?post_type=' . self::POST_TYPE,
+            self::t('reply_menu'),
+            self::t('reply_menu'),
+            'manage_options',
+            self::REPLY_SLUG,
+            array(__CLASS__, 'render_reply_page')
+        );
     }
 
     /** 两套模板各注册一个 option（分组不同，表单才互不覆盖） */
@@ -2788,6 +2825,69 @@ HTML;
             'sanitize_callback' => array(__CLASS__, 'sanitize_autoreply'),
             'default'           => array(),
         ));
+        register_setting('eln_reply_group', self::OPT_REPLY, array(
+            'type'              => 'array',
+            'sanitize_callback' => array(__CLASS__, 'sanitize_reply'),
+            'default'           => array(),
+        ));
+    }
+
+    /** 「回信模板」保存时的清洗：占位符要原样保留，正文保留换行 */
+    public static function sanitize_reply($input): array {
+        $input = is_array($input) ? $input : array();
+        return array(
+            'subject' => sanitize_text_field((string) ($input['subject'] ?? '')),
+            'body'    => sanitize_textarea_field((string) ($input['body'] ?? '')),
+        );
+    }
+
+    /** 人工回信模板：option 为空（或整体为空串）时用默认 */
+    public static function reply_tpl(): array {
+        $tpl = (array) get_option(self::OPT_REPLY, array());
+        $default = self::reply_template_default();
+        return array(
+            'subject' => trim((string) ($tpl['subject'] ?? '')) !== '' ? (string) $tpl['subject'] : $default['subject'],
+            'body'    => trim((string) ($tpl['body'] ?? '')) !== '' ? (string) $tpl['body'] : $default['body'],
+        );
+    }
+
+    /** 回信模板默认值（mailto 正文是纯文本，不认 HTML） */
+    private static function reply_template_default(): array {
+        return array(
+            'subject' => 'Re: {{no}}',
+            'body'    => "Dear {{name}},\n\nThank you for your inquiry (No. {{no}}, submitted {{date}}).\n\n\n\nBest regards,",
+        );
+    }
+
+    /** 「回信模板」设置页：mailto 的主题/正文骨架，弹窗「回信」按钮据此生成链接 */
+    public static function render_reply_page(): void {
+        if (!current_user_can('manage_options')) {
+            wp_die(esc_html__('You do not have permission to access this page.', 'email-log-notifications'));
+        }
+        $tpl = (array) get_option(self::OPT_REPLY, array());
+        ?>
+        <div class="wrap">
+            <h1><?php echo esc_html(self::t('reply_menu')); ?></h1>
+            <p><?php echo esc_html(self::t('reply_hint')); ?></p>
+            <form method="post" action="options.php">
+                <?php settings_fields('eln_reply_group'); ?>
+                <table class="form-table" role="presentation">
+                    <tr>
+                        <th scope="row"><label for="eln-reply-subject"><?php echo esc_html(self::t('reply_subject')); ?></label></th>
+                        <td><input type="text" class="regular-text" id="eln-reply-subject"
+                                   name="<?php echo esc_attr(self::OPT_REPLY); ?>[subject]"
+                                   value="<?php echo esc_attr((string) ($tpl['subject'] ?? '')); ?>"></td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="eln-reply-body"><?php echo esc_html(self::t('reply_body')); ?></label></th>
+                        <td><textarea class="large-text code" rows="10" id="eln-reply-body"
+                                      name="<?php echo esc_attr(self::OPT_REPLY); ?>[body]"><?php echo esc_textarea((string) ($tpl['body'] ?? '')); ?></textarea></td>
+                    </tr>
+                </table>
+                <?php submit_button(); ?>
+            </form>
+        </div>
+        <?php
     }
 
     /** 「询盘通知」保存时的清洗 */
