@@ -299,11 +299,14 @@ final class Email_Log_Notifications {
             'modal_next'              => 'Next inquiry',
             'modal_reply'             => 'Email reply',
             'modal_delete'            => 'Delete',
-            'reply_menu'              => 'Email reply template',
+            'reply_menu'              => 'Reply template',
+            'reply_to'                => 'To',
+            'reply_cc'                => 'Cc',
+            'reply_bcc'               => 'Bcc',
             'reply_card_hint'         => 'Fills the subject and body of the mailto link behind the viewer\'s email reply button.',
             'reply_subject'           => 'Subject',
             'reply_body'              => 'Body',
-            'reply_hint'              => 'Placeholders: {{name}} name, {{email}} email, {{no}} inquiry no., {{date}} submitted time, {{source}} source. Leave a field empty to restore its default.',
+            'reply_hint'              => 'Placeholders (usable in every field): {{name}} name, {{email}} email, {{no}} inquiry no., {{date}} submitted time, {{source}} source. Multiple addresses are comma-separated; leave a field empty to restore its default.',
             'detail_time'             => 'Submitted',
             'form_page'        => 'Page form',
             'form_modal'       => 'Popup form',
@@ -420,11 +423,14 @@ final class Email_Log_Notifications {
             'modal_next'              => '下一条询盘',
             'modal_reply'             => '邮件回复',
             'modal_delete'            => '删除',
-            'reply_menu'              => '邮件回复模板',
+            'reply_menu'              => '回复模板',
+            'reply_to'                => '收件人',
+            'reply_cc'                => '抄送',
+            'reply_bcc'               => '密送',
             'reply_card_hint'         => '询盘弹窗里「邮件回复」按钮的 mailto 主题与正文骨架。',
             'reply_subject'           => '邮件主题',
             'reply_body'              => '邮件正文',
-            'reply_hint'              => '可用占位符：{{name}} 姓名、{{email}} 邮箱、{{no}} 编号、{{date}} 提交时间、{{source}} 来源。某个输入框留空保存即恢复该处默认。',
+            'reply_hint'              => '占位符（所有字段通用）：{{name}} 姓名、{{email}} 邮箱、{{no}} 编号、{{date}} 提交时间、{{source}} 来源。多个地址用英文逗号分隔；某输入框留空保存即恢复该处默认。',
             'detail_time'             => '提交时间',
             'form_page'        => '页面表单',
             'form_modal'       => '弹窗表单',
@@ -541,11 +547,14 @@ final class Email_Log_Notifications {
             'modal_next'              => '下一條詢盤',
             'modal_reply'             => '郵件回覆',
             'modal_delete'            => '刪除',
-            'reply_menu'              => '郵件回覆範本',
+            'reply_menu'              => '回覆範本',
+            'reply_to'                => '收件人',
+            'reply_cc'                => '副本',
+            'reply_bcc'               => '密件副本',
             'reply_card_hint'         => '詢盤彈窗裡「郵件回覆」按鈕的 mailto 主題與正文骨架。',
             'reply_subject'           => '郵件主題',
             'reply_body'              => '郵件正文',
-            'reply_hint'              => '可用佔位符：{{name}} 姓名、{{email}} 郵箱、{{no}} 編號、{{date}} 提交時間、{{source}} 來源。某個輸入框留空儲存即恢復該處預設。',
+            'reply_hint'              => '佔位符（所有欄位通用）：{{name}} 姓名、{{email}} 郵箱、{{no}} 編號、{{date}} 提交時間、{{source}} 來源。多個地址以英文逗號分隔；某輸入框留空儲存即恢復該處預設。',
             'detail_time'             => '提交時間',
             'form_page'        => '頁面表單',
             'form_modal'       => '彈窗表單',
@@ -730,7 +739,6 @@ final class Email_Log_Notifications {
         add_action('restrict_manage_posts', array(__CLASS__, 'source_filter'));
         add_action('pre_get_posts', array(__CLASS__, 'apply_source_filter'));
         add_action('admin_head', array(__CLASS__, 'admin_list_styles'));
-        add_action('admin_head', array(__CLASS__, 'admin_menu_styles'));
         add_filter('post_row_actions', array(__CLASS__, 'row_actions'), 10, 2);
         add_action('admin_notices', array(__CLASS__, 'deleted_notice'));
         add_action('admin_menu', array(__CLASS__, 'register_view_page'));
@@ -1512,7 +1520,7 @@ final class Email_Log_Notifications {
         }
         return <<<'HTML'
 <div style="margin:0;padding:40px 12px;background:#f7f7f7;font-family:'PingFang SC','Microsoft YaHei',sans-serif;letter-spacing:.5px;">
-  <table role="presentation" cellpadding="0" cellspacing="0" width="640" style="width:640px;max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #eaeaea;border-collapse:collapse;">
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #eaeaea;border-collapse:collapse;">
     <tr>
       <td style="padding:28px 40px;background:#04979e;">
         <!-- 页头第一行：编号 + 标题，改文案就在这里 -->
@@ -1553,7 +1561,7 @@ HTML;
     private static function default_autoreply_html(): string {
         return <<<'HTML'
 <div style="margin:0;padding:40px 12px;background:#f7f7f7;font-family:'PingFang SC','Microsoft YaHei',sans-serif;letter-spacing:.5px;">
-  <table role="presentation" cellpadding="0" cellspacing="0" width="640" style="width:640px;max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #eaeaea;border-collapse:collapse;">
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="width:100%;max-width:640px;margin:0 auto;background:#ffffff;border:1px solid #eaeaea;border-collapse:collapse;">
     <tr>
       <td style="padding:28px 40px;background:#04979e;">
         <!-- 页头：标题 + 编号，改文案就在这里 -->
@@ -2061,31 +2069,7 @@ HTML;
         ));
     }
 
-    /**
-     * 询盘的子菜单统一走「右侧浮层」。
-     *
-     * WP 只会给「非当前」的菜单加 .wp-not-current-submenu（那才是浮层）；
-     * 当前区块则用 .wp-has-current-submenu 在侧栏里向下展开，把外观/插件等整体顶下去。
-     * 这里把当前态也按浮层渲染——位置/尺寸/阴影照抄 .folded 分支的那套，
-     * 只是左偏移用展开态侧栏宽度（窄屏 auto-fold 时退回 36px）。
-     */
-    public static function admin_menu_styles(): void {
-        echo '<style>'
-            . '#adminmenu li#menu-posts-' . self::POST_TYPE . '.wp-has-current-submenu > .wp-submenu{'
-            . 'position:absolute;top:-1000em;left:160px;min-width:160px;width:auto;z-index:9999;'
-            . 'border:1px solid transparent;border-left-width:5px;box-shadow:0 3px 5px rgba(0,0,0,.2);}'
-            . '#adminmenu li#menu-posts-' . self::POST_TYPE . '.wp-has-current-submenu:hover,'
-            . '#adminmenu li#menu-posts-' . self::POST_TYPE . '.wp-has-current-submenu.opensub,'
-            . '#adminmenu li#menu-posts-' . self::POST_TYPE . '.wp-has-current-submenu:focus-within{z-index:10000;}'
-            . '#adminmenu li#menu-posts-' . self::POST_TYPE . '.wp-has-current-submenu:hover > .wp-submenu,'
-            . '#adminmenu li#menu-posts-' . self::POST_TYPE . '.wp-has-current-submenu.opensub > .wp-submenu,'
-            . '#adminmenu li#menu-posts-' . self::POST_TYPE . '.wp-has-current-submenu:focus-within > .wp-submenu{top:-1px;}'
-            . '@media screen and (max-width:960px){'
-            . '#adminmenu li#menu-posts-' . self::POST_TYPE . '.wp-has-current-submenu > .wp-submenu{left:36px;}}'
-            // 收起菜单后侧栏只剩 36px，浮层要贴着图标出（WP 自己的 folded 规则扛不过上面的双 ID 选择器）
-            . '.folded #adminmenu li#menu-posts-' . self::POST_TYPE . '.wp-has-current-submenu > .wp-submenu{left:36px;}'
-            . '</style>';
-    }
+    /* 菜单交互完全交给 WP 原生：展开态内联展开、收起态核心自带悬停浮层（此前的自定义浮层 hack 已删） */
 
     /** 列表列宽：来源是「英文标题（表单类型）」，默认宽度会折成两行 */
     public static function admin_list_styles(): void {
@@ -2431,6 +2415,12 @@ HTML;
             .eln-modal__main{flex:1;min-width:0;overflow:auto;padding:28px 32px 40px;background:#fff;}
             .eln-modal__stage{max-width:720px;margin:0 auto;border:1px solid #dcdcde;background:#fff;box-shadow:0 1px 8px rgba(0,0,0,.07);}
             .eln-modal__stage>*{display:block;padding:28px 32px;}
+            /* 邮件表格自适应信纸框：模板已改 width:100%;max-width:640px，
+               存量记录里 640px 硬编码的表格在这里强制收缩（!important 压过行内样式） */
+            .eln-modal__stage img{max-width:100%;height:auto;}
+            .eln-modal__stage table{max-width:100%;}
+            .eln-modal__stage table[width="640"],
+            .eln-modal__stage table[style*="640px"]{width:100% !important;max-width:100% !important;}
             .eln-modal__loading{text-align:center;color:#646970;padding:64px 0;border:0;box-shadow:none;}
             .eln-modal__side{flex:none;width:30%;min-width:280px;max-width:440px;overflow:auto;padding:20px 25px;background:#fff;}
             .eln-modal__chip{display:inline-block;padding:1px 8px;border-radius:3px;font-size:12px;line-height:1.7;}
@@ -2465,6 +2455,9 @@ HTML;
              data-nonce="<?php echo esc_attr(wp_create_nonce('eln_inquiry_detail')); ?>"
              data-loading="<?php echo esc_attr(self::t('modal_loading')); ?>"
              data-error="<?php echo esc_attr(self::t('modal_error')); ?>"
+             data-reply-to="<?php echo esc_attr(self::reply_tpl()['to']); ?>"
+             data-reply-cc="<?php echo esc_attr(self::reply_tpl()['cc']); ?>"
+             data-reply-bcc="<?php echo esc_attr(self::reply_tpl()['bcc']); ?>"
              data-reply-subject="<?php echo esc_attr(self::reply_tpl()['subject']); ?>"
              data-reply-body="<?php echo esc_attr(self::reply_tpl()['body']); ?>"
              data-confirm-delete="<?php echo esc_attr(self::t('confirm_delete')); ?>">
@@ -2564,7 +2557,7 @@ HTML;
                 chip.hidden = !(d.state && d.status);
                 chip.textContent = d.status || '';
                 chip.className = 'eln-modal__chip' + (d.state ? ' is-' + d.state : '');
-                // 回信 = mailto：主题/正文骨架取自「回信模板」设置，占位符按本条记录填充
+                // 回复 = mailto：to/cc/bcc/subject/body 全部来自「回复模板」设置，占位符按本条记录填充
                 reply.hidden = !d.email;
                 if (d.email) {
                     var ctx = {
@@ -2576,10 +2569,18 @@ HTML;
                             return ctx[k] || '';
                         });
                     };
-                    var href = 'mailto:' + d.email + '?subject=' + encodeURIComponent(fill(modal.getAttribute('data-reply-subject')));
+                    // to 留空时兜底访客邮箱；cc/bcc/subject/body 非空才进 query
+                    var to = fill(modal.getAttribute('data-reply-to')) || d.email;
+                    var parts = [];
+                    var cc = fill(modal.getAttribute('data-reply-cc'));
+                    var bcc = fill(modal.getAttribute('data-reply-bcc'));
+                    var subject = fill(modal.getAttribute('data-reply-subject'));
                     var body = fill(modal.getAttribute('data-reply-body'));
-                    if (body) { href += '&body=' + encodeURIComponent(body); }
-                    reply.href = href;
+                    if (cc) { parts.push('cc=' + encodeURIComponent(cc)); }
+                    if (bcc) { parts.push('bcc=' + encodeURIComponent(bcc)); }
+                    if (subject) { parts.push('subject=' + encodeURIComponent(subject)); }
+                    if (body) { parts.push('body=' + encodeURIComponent(body)); }
+                    reply.href = 'mailto:' + encodeURIComponent(to) + (parts.length ? '?' + parts.join('&') : '');
                 }
                 del.hidden = !d.delete;
                 del.removeAttribute('href');
@@ -2877,24 +2878,31 @@ HTML;
     public static function sanitize_reply($input): array {
         $input = is_array($input) ? $input : array();
         return array(
+            'to'      => sanitize_text_field((string) ($input['to'] ?? '')),
+            'cc'      => sanitize_text_field((string) ($input['cc'] ?? '')),
+            'bcc'     => sanitize_text_field((string) ($input['bcc'] ?? '')),
             'subject' => sanitize_text_field((string) ($input['subject'] ?? '')),
             'body'    => sanitize_textarea_field((string) ($input['body'] ?? '')),
         );
     }
 
-    /** 人工回信模板：option 为空（或整体为空串）时用默认 */
+    /** 人工回信模板：某字段为空（或整体为空串）时该字段用默认 */
     public static function reply_tpl(): array {
         $tpl = (array) get_option(self::OPT_REPLY, array());
         $default = self::reply_template_default();
-        return array(
-            'subject' => trim((string) ($tpl['subject'] ?? '')) !== '' ? (string) $tpl['subject'] : $default['subject'],
-            'body'    => trim((string) ($tpl['body'] ?? '')) !== '' ? (string) $tpl['body'] : $default['body'],
-        );
+        $out = array();
+        foreach ($default as $key => $def) {
+            $out[$key] = trim((string) ($tpl[$key] ?? '')) !== '' ? (string) $tpl[$key] : $def;
+        }
+        return $out;
     }
 
-    /** 回信模板默认值（mailto 正文是纯文本，不认 HTML） */
+    /** 回复模板默认值（mailto 正文是纯文本，不认 HTML；to 留空占位符则回退访客邮箱） */
     private static function reply_template_default(): array {
         return array(
+            'to'      => '{{email}}',
+            'cc'      => '',
+            'bcc'     => '',
             'subject' => 'Re: {{no}}',
             'body'    => "Dear {{name}},\n\nThank you for your inquiry (No. {{no}}, submitted {{date}}).\n\n\n\nBest regards,",
         );
@@ -3248,6 +3256,25 @@ HTML;
                     <form method="post" action="options.php" class="si-tpl-card__body">
                         <?php settings_fields('eln_reply_group'); ?>
                         <?php $reply_tpl = self::reply_tpl(); ?>
+                        <div class="si-tpl-row">
+                            <div class="si-tpl-field si-tpl-field--grow">
+                                <label for="eln-reply-to"><?php echo esc_html(self::t('reply_to')); ?></label>
+                                <input type="text" name="<?php echo esc_attr(self::OPT_REPLY); ?>[to]" id="eln-reply-to"
+                                       class="large-text" value="<?php echo esc_attr($reply_tpl['to']); ?>" />
+                            </div>
+                        </div>
+                        <div class="si-tpl-row">
+                            <div class="si-tpl-field si-tpl-field--grow">
+                                <label for="eln-reply-cc"><?php echo esc_html(self::t('reply_cc')); ?></label>
+                                <input type="text" name="<?php echo esc_attr(self::OPT_REPLY); ?>[cc]" id="eln-reply-cc"
+                                       class="large-text" value="<?php echo esc_attr($reply_tpl['cc']); ?>" />
+                            </div>
+                            <div class="si-tpl-field si-tpl-field--grow">
+                                <label for="eln-reply-bcc"><?php echo esc_html(self::t('reply_bcc')); ?></label>
+                                <input type="text" name="<?php echo esc_attr(self::OPT_REPLY); ?>[bcc]" id="eln-reply-bcc"
+                                       class="large-text" value="<?php echo esc_attr($reply_tpl['bcc']); ?>" />
+                            </div>
+                        </div>
                         <div class="si-tpl-row">
                             <div class="si-tpl-field si-tpl-field--grow">
                                 <label for="eln-reply-subject"><?php echo esc_html(self::t('reply_subject')); ?></label>
