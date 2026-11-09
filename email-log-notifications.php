@@ -303,7 +303,7 @@ final class Email_Log_Notifications {
             'reply_card_hint'         => 'Fills the subject and body of the mailto link behind the viewer\'s email reply button.',
             'reply_subject'           => 'Subject',
             'reply_body'              => 'Body',
-            'reply_hint'              => 'Placeholders: {{name}} name, {{email}} email, {{no}} inquiry no., {{date}} submitted time, {{source}} source. Save empty to restore the defaults.',
+            'reply_hint'              => 'Placeholders: {{name}} name, {{email}} email, {{no}} inquiry no., {{date}} submitted time, {{source}} source. Leave a field empty to restore its default.',
             'detail_time'             => 'Submitted',
             'form_page'        => 'Page form',
             'form_modal'       => 'Popup form',
@@ -424,7 +424,7 @@ final class Email_Log_Notifications {
             'reply_card_hint'         => '询盘弹窗里「邮件回复」按钮的 mailto 主题与正文骨架。',
             'reply_subject'           => '邮件主题',
             'reply_body'              => '邮件正文',
-            'reply_hint'              => '可用占位符：{{name}} 姓名、{{email}} 邮箱、{{no}} 编号、{{date}} 提交时间、{{source}} 来源。全部留空保存即恢复默认。',
+            'reply_hint'              => '可用占位符：{{name}} 姓名、{{email}} 邮箱、{{no}} 编号、{{date}} 提交时间、{{source}} 来源。某个输入框留空保存即恢复该处默认。',
             'detail_time'             => '提交时间',
             'form_page'        => '页面表单',
             'form_modal'       => '弹窗表单',
@@ -545,7 +545,7 @@ final class Email_Log_Notifications {
             'reply_card_hint'         => '詢盤彈窗裡「郵件回覆」按鈕的 mailto 主題與正文骨架。',
             'reply_subject'           => '郵件主題',
             'reply_body'              => '郵件正文',
-            'reply_hint'              => '可用佔位符：{{name}} 姓名、{{email}} 郵箱、{{no}} 編號、{{date}} 提交時間、{{source}} 來源。全部留空儲存即恢復預設。',
+            'reply_hint'              => '可用佔位符：{{name}} 姓名、{{email}} 郵箱、{{no}} 編號、{{date}} 提交時間、{{source}} 來源。某個輸入框留空儲存即恢復該處預設。',
             'detail_time'             => '提交時間',
             'form_page'        => '頁面表單',
             'form_modal'       => '彈窗表單',
@@ -2900,40 +2900,6 @@ HTML;
         );
     }
 
-    /** 「回信模板」卡片：mailto 的主题/正文骨架，弹窗「回信」按钮据此生成链接；并进「邮件模板」页 */
-    public static function render_reply_card(): void {
-        if (!current_user_can('manage_options')) {
-            return;
-        }
-        $tpl = (array) get_option(self::OPT_REPLY, array());
-        ?>
-        <div class="si-tpl-card" style="margin-top:20px;">
-            <div class="si-tpl-card__head">
-                <h2><?php echo esc_html(self::t('reply_menu')); ?></h2>
-                <span class="description"><?php echo esc_html(self::t('reply_card_hint')); ?></span>
-            </div>
-            <form method="post" action="options.php" class="si-tpl-card__body">
-                <?php settings_fields('eln_reply_group'); ?>
-                <table class="form-table" role="presentation">
-                    <tr>
-                        <th scope="row"><label for="eln-reply-subject"><?php echo esc_html(self::t('reply_subject')); ?></label></th>
-                        <td><input type="text" class="regular-text" id="eln-reply-subject"
-                                   name="<?php echo esc_attr(self::OPT_REPLY); ?>[subject]"
-                                   value="<?php echo esc_attr((string) ($tpl['subject'] ?? '')); ?>"></td>
-                    </tr>
-                    <tr>
-                        <th scope="row"><label for="eln-reply-body"><?php echo esc_html(self::t('reply_body')); ?></label></th>
-                        <td><textarea class="large-text code" rows="8" id="eln-reply-body"
-                                      name="<?php echo esc_attr(self::OPT_REPLY); ?>[body]"><?php echo esc_textarea((string) ($tpl['body'] ?? '')); ?></textarea></td>
-                    </tr>
-                </table>
-                <p class="description"><?php echo esc_html(self::t('reply_hint')); ?></p>
-                <?php submit_button(null, 'primary', 'submit', false); ?>
-            </form>
-        </div>
-        <?php
-    }
-
     /** 「询盘通知」保存时的清洗 */
     public static function sanitize_template($input): array {
         return self::sanitize_template_of($input, 'notify');
@@ -3048,13 +3014,16 @@ HTML;
     private static function current_kind(): string {
         // phpcs:ignore WordPress.Security.NonceVerification.Recommended
         $kind = isset($_GET['kind']) ? sanitize_key((string) $_GET['kind']) : '';
-        return $kind === 'autoreply' ? 'autoreply' : 'notify';
+        if ($kind === 'autoreply') {
+            return 'autoreply';
+        }
+        return $kind === 'reply' ? 'reply' : 'notify';
     }
 
-    /** 模板页某个标签的地址（两个标签只差 kind 参数） */
+    /** 模板页某个标签的地址（标签之间只差 kind 参数） */
     private static function template_tab_url(string $kind): string {
         $url = admin_url('edit.php?post_type=' . self::POST_TYPE . '&page=' . self::TPL_SLUG);
-        return $kind === 'autoreply' ? add_query_arg('kind', 'autoreply', $url) : $url;
+        return $kind === 'notify' ? $url : add_query_arg('kind', $kind, $url);
     }
 
     /** 自动确认里，当前正在编辑哪一个语言组（越界回落到默认组） */
@@ -3258,6 +3227,7 @@ HTML;
                 $tabs = array(
                     'notify'    => self::t('tpl_tab_notify'),
                     'autoreply' => self::t('tpl_tab_reply'),
+                    'reply'     => self::t('reply_menu'),
                 );
                 foreach ($tabs as $tab_kind => $tab_label) :
                     ?>
@@ -3268,6 +3238,33 @@ HTML;
 
             <p class="si-tpl-lede"><?php echo esc_html(self::t('tpl_intro')); ?></p>
 
+            <?php if ($kind === 'reply') : ?>
+                <?php // 「邮件回复」标签：mailto 的主题/正文骨架，弹窗「邮件回复」按钮据此生成链接；输入框直接显示生效中的模板（含默认值） ?>
+                <div class="si-tpl-card">
+                    <div class="si-tpl-card__head">
+                        <h2><?php echo esc_html(self::t('reply_menu')); ?></h2>
+                        <span class="description"><?php echo esc_html(self::t('reply_card_hint')); ?></span>
+                    </div>
+                    <form method="post" action="options.php" class="si-tpl-card__body">
+                        <?php settings_fields('eln_reply_group'); ?>
+                        <?php $reply_tpl = self::reply_tpl(); ?>
+                        <div class="si-tpl-row">
+                            <div class="si-tpl-field si-tpl-field--grow">
+                                <label for="eln-reply-subject"><?php echo esc_html(self::t('reply_subject')); ?></label>
+                                <input type="text" name="<?php echo esc_attr(self::OPT_REPLY); ?>[subject]" id="eln-reply-subject"
+                                       class="large-text" value="<?php echo esc_attr($reply_tpl['subject']); ?>" />
+                            </div>
+                        </div>
+                        <div class="si-tpl-field" style="display:flex;">
+                            <label for="eln-reply-body"><?php echo esc_html(self::t('reply_body')); ?></label>
+                            <textarea class="large-text code" rows="10" id="eln-reply-body" style="margin-top:6px;"
+                                      name="<?php echo esc_attr(self::OPT_REPLY); ?>[body]"><?php echo esc_textarea($reply_tpl['body']); ?></textarea>
+                        </div>
+                        <p class="description"><?php echo esc_html(self::t('reply_hint')); ?></p>
+                        <p class="si-tpl-save"><?php submit_button(null, 'primary', 'submit', false); ?></p>
+                    </form>
+                </div>
+            <?php else : ?>
             <div class="si-tpl-grid">
                 <div class="si-tpl-card">
                     <div class="si-tpl-card__head">
@@ -3448,7 +3445,7 @@ HTML;
                     <p class="si-preview-note"><?php echo esc_html(self::t('tpl_sample_note')); ?>: Jane Doe &lt;jane.doe@example.com&gt;</p>
                 </div>
             </div>
-            <?php self::render_reply_card(); ?>
+            <?php endif; ?>
         </div>
         <?php
     }
