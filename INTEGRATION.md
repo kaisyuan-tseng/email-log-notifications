@@ -1,4 +1,4 @@
-# 询盘中心（Site Inquiries）· 前端对接说明
+# Email Log & Notifications · 前端对接说明
 
 一份给**任何前端**看的接入文档。插件只认 HTTP 与 multipart，不关心你用 React、Vue、Svelte、Astro、jQuery 还是纯 HTML 表单。
 
@@ -19,7 +19,7 @@
 ## 2. 接口契约
 
 ```
-POST /wp-json/site-inquiries/v1/inquiry
+POST /wp-json/email-log-notifications/v1/inquiry
 Content-Type: multipart/form-data（浏览器自动带 boundary，不要手写）
 ```
 
@@ -28,7 +28,7 @@ Content-Type: multipart/form-data（浏览器自动带 boundary，不要手写�
 默认 `fullName`、`email`、`message`。可通过 filter 整组替换（见 §7）：
 
 ```php
-add_filter('site_inquiries_required_fields', fn() => ['name', 'mail', 'body']);
+add_filter('eln_required_fields', fn() => ['name', 'mail', 'body']);
 ```
 
 校验规则：非空（去首尾空白）；`email` 额外走 `is_email()`。
@@ -67,9 +67,9 @@ fieldLabels[outerDiameter]=外径
 | `pictures[]` | png jpg jpeg webp | 10 MB |
 
 - 字段名**必须带 `[]`**，否则多个文件只会留下最后一个。
-- 单次总数上限 20（filter `site_inquiries_max_files`）。
+- 单次总数上限 20（filter `eln_max_files`）。
 - 服务端只看扩展名，不做 MIME 嗅探；前端应先用 `accept` 和 `size` 拦住明显不合规的文件。
-- 附件最终落在 `wp-content/uploads/site-inquiries/{年月}/{记录ID-随机}/`，meta 里存的是相对 Web 路径。
+- 附件最终落在 `wp-content/uploads/email-log-notifications/{年月}/{记录ID-随机}/`，meta 里存的是相对 Web 路径。
 
 ### 2.5 蜜罐
 
@@ -77,9 +77,9 @@ fieldLabels[outerDiameter]=外径
 
 ### 2.6 询盘编号
 
-服务端在入库时生成编号，格式 `YYYYMMDD` + 3 位当日流水（如 `20261105001`），存进记录的 `site_inq_no` meta，邮件模板里用 `{{no}}` 引用。流水用 MySQL 的 `LAST_INSERT_ID(expr)` 原子自增，并发提交不会重号；每日一个计数器（option `site_inq_seq_YYYYMMDD`）。「发送测试邮件」和预览不会消耗真实编号。
+服务端在入库时生成编号，格式 `YYYYMMDD` + 3 位当日流水（如 `20261105001`），存进记录的 `inquiry_no` meta，邮件模板里用 `{{no}}` 引用。流水用 MySQL 的 `LAST_INSERT_ID(expr)` 原子自增，并发提交不会重号；每日一个计数器（option `inquiry_seq_YYYYMMDD`）。「发送测试邮件」和预览不会消耗真实编号。
 
-插件启用后的首次进入后台时，会给**早于该功能**的旧记录按提交时间补号（option `site_inq_numbers_backfilled` 记账，只跑一次），当天计数器同时推到已用最大值，保证下一封询盘接着排。
+插件启用后的首次进入后台时，会给**早于该功能**的旧记录按提交时间补号（option `inquiry_numbers_backfilled` 记账，只跑一次），当天计数器同时推到已用最大值，保证下一封询盘接着排。
 
 ### 2.7 环境数据：IP / 浏览器语言 / 时区
 
@@ -110,11 +110,11 @@ if (tz) data.append("timezone", tz);
 | 情况 | 状态码 | 响应体 |
 |---|---|---|
 | 成功 | 200 | `{"sent": true}` |
-| 缺必填 | 400 | `{"code":"site_inq_missing_field", ...}` |
-| 邮箱非法 | 400 | `{"code":"site_inq_invalid_email", ...}` |
-| 附件不合规 | 400 | `{"code":"site_inq_bad_upload","message":"File type .exe is not allowed."}` |
-| 触发限流 | 429 | `{"code":"site_inq_rate_limited", ...}` |
-| 发信失败 | 500 | `{"code":"site_inq_mail_failed", ...}` |
+| 缺必填 | 400 | `{"code":"inquiry_missing_field", ...}` |
+| 邮箱非法 | 400 | `{"code":"inquiry_invalid_email", ...}` |
+| 附件不合规 | 400 | `{"code":"inquiry_bad_upload","message":"File type .exe is not allowed."}` |
+| 触发限流 | 429 | `{"code":"inquiry_rate_limited", ...}` |
+| 发信失败 | 500 | `{"code":"inquiry_mail_failed", ...}` |
 
 前端只需要区分 `2xx` / 非 `2xx`；错误文案用站点自己的兜底提示。
 
@@ -124,8 +124,8 @@ if (tz) data.append("timezone", tz);
 
 | 标签页 | option | 发给谁 | 结构 |
 |---|---|---|---|
-| 询盘通知 | `site_inquiries_template` | 站长/销售（`admin_email`，filter `site_inquiries_recipient`） | `subject` / `html` / `labels` |
-| 自动确认 | `site_inquiries_autoreply` | **访客自己填的邮箱** | `enabled` + `groups[]`，每组含 `lang` / `subject` / `html` / `labels` |
+| 询盘通知 | `eln_template` | 站长/销售（`admin_email`，filter `eln_recipient`） | `subject` / `html` / `labels` |
+| 自动确认 | `eln_autoreply` | **访客自己填的邮箱** | `enabled` + `groups[]`，每组含 `lang` / `subject` / `html` / `labels` |
 
 **自动确认按浏览器语言分「语言组」**：
 
@@ -135,8 +135,8 @@ if (tz) data.append("timezone", tz);
 - 后台在「自动确认」页用标签条切换语言组，可新增/删除（默认组不可删）。
 - 默认关闭，勾选「启用自动确认」才发；发信顺序固定：先通知、后确认，两者互不牵连。
 - 确认邮件带 `Reply-To: <询盘收件人>`，客户直接回信落到销售邮箱；不带附件。
-- 状态各记各的：通知 → `site_inq_mail_sent`，自动确认 → `site_inq_autoreply_sent`（未启用时不写，后台显示「—」）。
-- 发出后可挂 `do_action('site_inquiries_autoreply_sent', $sent, $email, $fields)`。
+- 状态各记各的：通知 → `inquiry_mail_sent`，自动确认 → `inquiry_autoreply_sent`（未启用时不写，后台显示「—」）。
+- 发出后可挂 `do_action('eln_autoreply_sent', $sent, $email, $fields)`。
 
 **占位符（两套模板通用，只输出值、不带标签）**：
 
@@ -206,7 +206,7 @@ document.getElementById('inquiry').addEventListener('submit', async (e) => {
   if (tz) data.append('timezone', tz);
 
   // 3) 提交（不要手写 Content-Type）
-  const res = await fetch('/wp-json/site-inquiries/v1/inquiry', { method: 'POST', body: data });
+  const res = await fetch('/wp-json/email-log-notifications/v1/inquiry', { method: 'POST', body: data });
   if (res.ok) {
     form.reset();
     // 清空自定义上传组件、重置自定义下拉…
@@ -238,7 +238,7 @@ async function onSubmit(e) {
   const data = new FormData(form);
   // 受控组件也在 DOM 里，FormData 同样能取到
   data.append('fieldLabels[fullName]', '姓名');
-  const res = await fetch('/wp-json/site-inquiries/v1/inquiry', { method: 'POST', body: data });
+  const res = await fetch('/wp-json/email-log-notifications/v1/inquiry', { method: 'POST', body: data });
   if (res.ok) form.reset();
 }
 ```
@@ -255,7 +255,7 @@ async function onSubmit(e) {
 const form = ref(null);
 async function submit() {
   const data = new FormData(form.value);
-  const res = await fetch('/wp-json/site-inquiries/v1/inquiry', { method: 'POST', body: data });
+  const res = await fetch('/wp-json/email-log-notifications/v1/inquiry', { method: 'POST', body: data });
   if (res.ok) form.value.reset();
 }
 </script>
@@ -275,7 +275,7 @@ async function submit() {
 ### 纯 HTML（无 JS）
 
 ```html
-<form action="/wp-json/site-inquiries/v1/inquiry" method="post" enctype="multipart/form-data">…</form>
+<form action="/wp-json/email-log-notifications/v1/inquiry" method="post" enctype="multipart/form-data">…</form>
 ```
 
 可提交成功（浏览器会跳转显示 JSON），但拿不到成功/失败提示。要留在页面上就必须用 `fetch`。
@@ -289,7 +289,7 @@ async function submit() {
 | 请求数 | 每次提交 **1 个** multipart 请求；附件随请求走，没有分片/二次上传 |
 | 服务端开销 | 校验 → 存记录 → 移动附件 → 组邮件 → 发信，一次同步完成（SMTP 通常 0.3–1s） |
 | 前端依赖 | 0；不加载任何插件脚本、不依赖 jQuery |
-| 与 CMS 解耦 | 插件只写自己的 CPT 与 `wp-content/uploads/site-inquiries/`，不改主题、不注册短代码 |
+| 与 CMS 解耦 | 插件只写自己的 CPT 与 `wp-content/uploads/email-log-notifications/`，不改主题、不注册短代码 |
 | 迁移成本 | 换站点只需改端点地址与（可选）`pageTitleEn` 的来源 |
 
 > 本站额外做了一个优化：构建期生成 `dist/page-titles.json`（路径 → 英文标题），前端在页面加载时预热、提交时查表带上 `pageTitleEn`。这是**站点侧**的可选增强，插件不依赖它。
@@ -311,17 +311,17 @@ async function submit() {
 1. **必填字段**（如果不是 `fullName/email/message`）：
 
 ```php
-add_filter('site_inquiries_required_fields', fn() => ['name', 'mail', 'body']);
+add_filter('eln_required_fields', fn() => ['name', 'mail', 'body']);
 ```
 
 2. **收件人**（默认 `admin_email`）：
 
 ```php
-add_filter('site_inquiries_recipient', fn() => 'sales@example.com');
+add_filter('eln_recipient', fn() => 'sales@example.com');
 ```
 
-3. **附件上限 / 白名单**：`site_inquiries_max_files` 可改数量；白名单在插件常量 `FILE_GROUPS` 里。
-4. **反代命名空间**：nginx 只放行 `/wp-json/(site-inquiries|lfx)/`，新项目按需调整。
+3. **附件上限 / 白名单**：`eln_max_files` 可改数量；白名单在插件常量 `FILE_GROUPS` 里。
+4. **反代命名空间**：nginx 只放行 `/wp-json/(email-log-notifications|lfx)/`，新项目按需调整。
 5. **页面标题规范化**（可选）：不做的话，来源列显示前端提交的 `pageTitle`；做了就有统一英文口径。
 
 ---

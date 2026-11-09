@@ -14,11 +14,11 @@
  *
  * 设计取向：
  *   - 后台与邮件文案全部走内置三语字典（zh_CN / zh_TW / en，按 get_locale() 选择），
- *     可用 add_filter('site_inquiries_strings', fn($dict) => ...) 增补语种或改文案；
+ *     可用 add_filter('eln_strings', fn($dict) => ...) 增补语种或改文案；
  *   - 字段展示名后台可改、可拖动排序；没配就回落到表单自己提交的标签；
  *   - 邮件里的站名、配色都写在模板源码里，插件不注入任何品牌元素。
  *
- * 端点：POST /wp-json/site-inquiries/v1/inquiry
+ * 端点：POST /wp-json/email-log-notifications/v1/inquiry
  *   - Content-Type: multipart/form-data
  *   - 必填：fullName / email / message；其余字段按名透传
  *   - 环境数据：browserLanguage / timezone 由前端采集（服务端校验后入库）；
@@ -26,7 +26,7 @@
  *   - 附件：drawings[]（单个 ≤20MB）、pictures[]（单个 ≤10MB），扩展名白名单
  *   - 蜜罐字段 companyWebsite：非空即机器人，静默丢弃
  *
- * 附件留档：保存到 wp-content/uploads/site-inquiries/{年月}/{文章ID-随机}/
+ * 附件留档：保存到 wp-content/uploads/inquiries/{年月}/{文章ID-随机}/
  *   （在 uploads 下，主站 nginx 与 WP 两个域都能直接打开；随机目录名防猜测）；
  *   邮件附件来自留档路径（真实附件）；删除询盘记录时附件一并清理。
  *
@@ -35,8 +35,8 @@
  *   权限的用户（管理员）开放，删除时连同附件一起清掉。
  *
  * 邮件模板：两个标签页共用一套编辑器（源码 + 实时预览 + 测试发信 + 恢复默认）
- *   - 询盘通知  option site_inquiries_template（subject / html / labels）
- *   - 自动确认   option site_inquiries_autoreply（enabled + 语言组），默认关闭
+ *   - 询盘通知  option eln_template（subject / html / labels）
+ *   - 自动确认   option eln_autoreply（enabled + 语言组），默认关闭
  *     语言组按访客浏览器语言匹配：完整标签（zh-CN）→ 主语言（zh）→ 默认组（兜底）；
  *     每组各有 subject / html / labels，等价于「一种语言一份完整模板」；
  *     测试发信按当前语言组渲染，收件人固定为询盘收件人。
@@ -44,30 +44,30 @@
  *   品牌色不做占位符，默认模板里直接写 #04979e，想换色改源码即可。
  *
  * Filters：
- *   site_inquiries_recipient   收件人（默认 admin_email），同时作为自动确认的 Reply-To
- *   site_inquiries_max_files   单次提交附件总数（默认 20）
- *   site_inquiries_strings     语种字典增补
- *   site_inquiries_required_fields 必填字段（默认 fullName/email/message）
- *   site_inquiries_dashboard_limit 仪表盘「最近询盘」显示条数（默认 5）
+ *   eln_recipient   收件人（默认 admin_email），同时作为自动确认的 Reply-To
+ *   eln_max_files   单次提交附件总数（默认 20）
+ *   eln_strings     语种字典增补
+ *   eln_required_fields 必填字段（默认 fullName/email/message）
+ *   eln_dashboard_limit 仪表盘「最近询盘」显示条数（默认 5）
  * Actions：
- *   site_inquiries_autoreply_sent($sent, $email, $fields) 自动确认发信后
+ *   eln_autoreply_sent($sent, $email, $fields) 自动确认发信后
  */
 
 defined('ABSPATH') || exit;
 
-final class Site_Inquiries_Plugin {
+final class Email_Log_Notifications {
 
-    const REST_NAMESPACE = 'site-inquiries/v1';
-    const POST_TYPE      = 'site_inquiry';
-    const VIEW_SLUG      = 'site-inquiry-view';
-    const TPL_SLUG       = 'site-inquiry-template';
+    const REST_NAMESPACE = 'email-log-notifications/v1';
+    const POST_TYPE      = 'inquiry';
+    const VIEW_SLUG      = 'inquiry-view';
+    const TPL_SLUG       = 'inquiry-template';
     const HONEYPOT       = 'companyWebsite';
     /** 邮件模板设置存在这个 option 里 */
-    const OPT_TEMPLATE   = 'site_inquiries_template';
+    const OPT_TEMPLATE   = 'eln_template';
     /** 自动确认模板（含开关 + 语言组） */
-    const OPT_AUTOREPLY  = 'site_inquiries_autoreply';
-    /** 历史询盘补编号的一次性开关（site_inq_no 是后加的 meta） */
-    const OPT_BACKFILL   = 'site_inq_numbers_backfilled';
+    const OPT_AUTOREPLY  = 'eln_autoreply';
+    /** 历史询盘补编号的一次性开关（inquiry_no 是后加的 meta） */
+    const OPT_BACKFILL   = 'eln_numbers_backfilled';
 
     /**
      * 邮件里唯一的品牌色（页头底色 / 页脚竖条 / 链接）。
@@ -77,7 +77,7 @@ final class Site_Inquiries_Plugin {
     const BRAND_COLOR    = '#04979e';
 
     /** 附件总目录（在 uploads 下，主站 nginx 直接静态输出） */
-    private const STORAGE_DIR = 'site-inquiries';
+    private const STORAGE_DIR = 'inquiries';
 
     /** 模板页用的 CodeMirror 设置（enqueue 时拿到，footer 打印脚本时用） */
     private static $code_editor_settings = null;
@@ -187,7 +187,7 @@ final class Site_Inquiries_Plugin {
     );
 
     /* ==================================================================
-     * i18n：内置三语字典（en 为兜底），filter site_inquiries_strings 可增补
+     * i18n：内置三语字典（en 为兜底），filter eln_strings 可增补
      * ================================================================== */
 
     private static function strings(?string $locale = null): array {
@@ -534,7 +534,7 @@ final class Site_Inquiries_Plugin {
          * 语种字典增补：可整语种替换或新增语种（如 ja）。
          * 字典结构：['en' => [...], 'zh_CN' => [...], 'ja' => [...]]，未命中回落 en。
          */
-        $all = apply_filters('site_inquiries_strings', array(
+        $all = apply_filters('eln_strings', array(
             'en'    => $en,
             'zh_CN' => $zh,
             'zh_TW' => $tw,
@@ -584,10 +584,10 @@ final class Site_Inquiries_Plugin {
         if ($labels === null) {
             $post_id = (int) $wpdb->get_var(
                 "SELECT post_id FROM {$wpdb->postmeta}
-                 WHERE meta_key = 'site_inq_field_labels' AND meta_value <> 'a:0:{}'
+                 WHERE meta_key = 'inquiry_field_labels' AND meta_value <> 'a:0:{}'
                  ORDER BY meta_id DESC LIMIT 1"
             );
-            $labels = $post_id ? (array) get_post_meta($post_id, 'site_inq_field_labels', true) : array();
+            $labels = $post_id ? (array) get_post_meta($post_id, 'inquiry_field_labels', true) : array();
         }
         return $labels;
     }
@@ -595,7 +595,7 @@ final class Site_Inquiries_Plugin {
     /**
      * 可改的字段集合：字段名 => 默认标签（**顺序 = 后台排出来的行序**）。
      *
-     * 来源依次为：历史询盘提交的 fieldLabels（含没填值的字段）、旧版 site_inq_fields、
+     * 来源依次为：历史询盘提交的 fieldLabels（含没填值的字段）、旧版 inquiry_fields、
      * 后台已保存的标签键。一条都没有才退回 SAMPLE_FIELD_KEYS 占位。
      * 标签编辑器、邮件预览、测试发信都读它，保证三处字段集永远一致。
      *
@@ -608,10 +608,10 @@ final class Site_Inquiries_Plugin {
         $seen      = array();
 
         // fieldLabels 是「字段名 => 标签」的完整集合（含没填值的字段），
-        // site_inq_fields 是旧版本只记非空字段的产物；两者都收，才能列全表单字段。
+        // inquiry_fields 是旧版本只记非空字段的产物；两者都收，才能列全表单字段。
         $rows = $wpdb->get_col(
             "SELECT meta_value FROM {$wpdb->postmeta}
-             WHERE meta_key IN ('site_inq_field_labels', 'site_inq_fields')
+             WHERE meta_key IN ('inquiry_field_labels', 'inquiry_fields')
              ORDER BY meta_id DESC LIMIT 400"
         );
         foreach ((array) $rows as $serialized) {
@@ -674,7 +674,7 @@ final class Site_Inquiries_Plugin {
         add_action('init', array(__CLASS__, 'register_post_type'));
         add_action('before_delete_post', array(__CLASS__, 'purge_record_files'));
         add_action('untrashed_post', array(__CLASS__, 'restore_status'));
-        add_action('admin_post_site_inq_delete', array(__CLASS__, 'handle_delete'));
+        add_action('admin_post_inquiry_delete', array(__CLASS__, 'handle_delete'));
         add_action('admin_init', array(__CLASS__, 'backfill_numbers'));
 
         add_filter('manage_' . self::POST_TYPE . '_posts_columns', array(__CLASS__, 'admin_columns'));
@@ -696,10 +696,10 @@ final class Site_Inquiries_Plugin {
         add_action('admin_menu', array(__CLASS__, 'register_view_page'));
         add_action('admin_menu', array(__CLASS__, 'register_template_page'));
         add_action('admin_init', array(__CLASS__, 'register_template_setting'));
-        add_action('admin_post_site_inq_test_mail', array(__CLASS__, 'handle_test_mail'));
-        add_action('admin_post_site_inq_reset_template', array(__CLASS__, 'handle_reset_template'));
-        add_action('admin_post_site_inq_reply_addlang', array(__CLASS__, 'handle_add_reply_lang'));
-        add_action('admin_post_site_inq_reply_dellang', array(__CLASS__, 'handle_delete_reply_lang'));
+        add_action('admin_post_inquiry_test_mail', array(__CLASS__, 'handle_test_mail'));
+        add_action('admin_post_inquiry_reset_template', array(__CLASS__, 'handle_reset_template'));
+        add_action('admin_post_inquiry_reply_addlang', array(__CLASS__, 'handle_add_reply_lang'));
+        add_action('admin_post_inquiry_reply_dellang', array(__CLASS__, 'handle_delete_reply_lang'));
         add_action('admin_enqueue_scripts', array(__CLASS__, 'enqueue_template_assets'));
         add_action('admin_print_footer_scripts', array(__CLASS__, 'print_template_script'));
         // 仪表盘「最近询盘」小挂件
@@ -708,7 +708,7 @@ final class Site_Inquiries_Plugin {
         // 发信：补纯文本正文（只有 HTML 的邮件更容易被 Gmail 判垃圾），并记录失败原因
         add_action('phpmailer_init', array(__CLASS__, 'fill_alt_body'));
         add_action('wp_mail_failed', array(__CLASS__, 'capture_mail_error'));
-        add_action('wp_ajax_site_inq_preview', array(__CLASS__, 'ajax_preview'));
+        add_action('wp_ajax_inquiry_preview', array(__CLASS__, 'ajax_preview'));
         add_action('load-post.php', array(__CLASS__, 'block_edit_screen'));
         add_action('load-post-new.php', array(__CLASS__, 'block_edit_screen'));
     }
@@ -716,11 +716,16 @@ final class Site_Inquiries_Plugin {
     /* ================================================================== REST */
 
     public static function register_routes(): void {
-        register_rest_route(self::REST_NAMESPACE, '/inquiry', array(
+        $args = array(
             'methods'             => 'POST',
             'callback'            => array(__CLASS__, 'handle'),
             'permission_callback' => '__return_true',
-        ));
+        );
+
+        register_rest_route(self::REST_NAMESPACE, '/inquiry', $args);
+
+        // 兼容旧命名空间：改名前的页面缓存 / 前端包里还写着 site-inquiries/v1
+        register_rest_route('site-inquiries/v1', '/inquiry', $args);
     }
 
     public static function handle(WP_REST_Request $request) {
@@ -736,11 +741,11 @@ final class Site_Inquiries_Plugin {
         $ip = self::client_ip();
         $is_public = (bool) filter_var($ip, FILTER_VALIDATE_IP,
             FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
-        $key   = 'site_inq_rl_' . ($is_public ? md5($ip) : 'global');
+        $key   = 'inquiry_rl_' . ($is_public ? md5($ip) : 'global');
         $limit = $is_public ? self::RATE_LIMIT : self::RATE_LIMIT_GLOBAL;
         $count = (int) get_transient($key);
         if ($count >= $limit) {
-            return new WP_Error('site_inq_rate_limited',
+            return new WP_Error('inquiry_rate_limited',
                 'Too many submissions. Please try again later.', array('status' => 429));
         }
         set_transient($key, $count + 1, HOUR_IN_SECONDS);
@@ -784,15 +789,15 @@ final class Site_Inquiries_Plugin {
          * 必填字段：默认 fullName / email / message（本站契约）。
          * 其它前端可以整组换掉，插件本身不假设字段结构。
          */
-        $required_fields = (array) apply_filters('site_inquiries_required_fields', array('fullName', 'email', 'message'));
+        $required_fields = (array) apply_filters('eln_required_fields', array('fullName', 'email', 'message'));
         foreach ($required_fields as $required) {
             if (empty($fields[$required])) {
-                return new WP_Error('site_inq_missing_field',
+                return new WP_Error('inquiry_missing_field',
                     'Missing required field: ' . $required, array('status' => 400));
             }
         }
         if (!is_email($fields['email'])) {
-            return new WP_Error('site_inq_invalid_email', 'Invalid email address.', array('status' => 400));
+            return new WP_Error('inquiry_invalid_email', 'Invalid email address.', array('status' => 400));
         }
 
         // ---------- 附件校验并落到临时目录 ----------
@@ -802,12 +807,12 @@ final class Site_Inquiries_Plugin {
             // 抛错时可能有文件已经挪进暂存目录（同批里前几个合法、后面一个非法），
             // 这里必须先清理再返回，否则临时目录会一直堆着没人认领的文件。
             self::cleanup_stage();
-            return new WP_Error('site_inq_bad_upload', $e->getMessage(), array('status' => 400));
+            return new WP_Error('inquiry_bad_upload', $e->getMessage(), array('status' => 400));
         }
 
         // ---------- 组邮件 ----------
         $now      = time(); // 本次提交的时间戳：通知与自动确认共用，跨零点也不打架
-        $to       = apply_filters('site_inquiries_recipient', get_option('admin_email'));
+        $to       = apply_filters('eln_recipient', get_option('admin_email'));
         $tpl      = self::tpl();
         $inquiry_no = self::next_inquiry_no(); // 20261105001
         $subject  = self::build_subject($fields, $tpl);
@@ -820,7 +825,7 @@ final class Site_Inquiries_Plugin {
         // ---------- 附件挪进留档目录（持久化；发信与后台下载都用这份） ----------
         $stored = $record_id ? self::persist_attachments($staged, $record_id) : $staged;
         if ($record_id) {
-            update_post_meta($record_id, 'site_inq_attachments', $stored);
+            update_post_meta($record_id, 'inquiry_attachments', $stored);
         }
 
         // ---------- 发信：先发通知，再回访客 ----------
@@ -828,10 +833,10 @@ final class Site_Inquiries_Plugin {
         $error = self::$mail_error;
 
         if ($record_id) {
-            update_post_meta($record_id, 'site_inq_mail_sent', $sent ? 'yes' : 'no');
+            update_post_meta($record_id, 'inquiry_mail_sent', $sent ? 'yes' : 'no');
             if (!$sent && $error !== '') {
                 // 失败原因留在记录上，后台详情的「发信」一行会显示出来
-                update_post_meta($record_id, 'site_inq_mail_error', $error);
+                update_post_meta($record_id, 'inquiry_mail_error', $error);
             }
         }
 
@@ -840,9 +845,9 @@ final class Site_Inquiries_Plugin {
         // 返回 null = 功能未启用，此时不写 meta，后台显示「—」而不是「失败」。
         $replied = self::send_autoreply($fields, $inquiry_no, $now);
         if ($record_id && $replied !== null) {
-            update_post_meta($record_id, 'site_inq_autoreply_sent', $replied ? 'yes' : 'no');
+            update_post_meta($record_id, 'inquiry_autoreply_sent', $replied ? 'yes' : 'no');
             if ($replied === false && self::$mail_error !== '') {
-                update_post_meta($record_id, 'site_inq_autoreply_error', self::$mail_error);
+                update_post_meta($record_id, 'inquiry_autoreply_error', self::$mail_error);
             }
         }
 
@@ -851,7 +856,7 @@ final class Site_Inquiries_Plugin {
         self::cleanup_stage(wp_list_pluck($stored, 'path'));
 
         if (!$sent) {
-            return new WP_Error('site_inq_mail_failed',
+            return new WP_Error('inquiry_mail_failed',
                 'The message could not be delivered. Please email us directly.',
                 array('status' => 500));
         }
@@ -873,7 +878,7 @@ final class Site_Inquiries_Plugin {
             throw new RuntimeException('Could not create temp directory.');
         }
 
-        $max_files = (int) apply_filters('site_inquiries_max_files', 20);
+        $max_files = (int) apply_filters('eln_max_files', 20);
 
         foreach (self::FILE_GROUPS as $group => $spec) {
             if (empty($_FILES[$group])) {
@@ -929,7 +934,7 @@ final class Site_Inquiries_Plugin {
         return $dir;
     }
 
-    /** 附件持久化：uploads/site-inquiries/{Ym}/{文章ID-随机}/，返回留档后的文件数组 */
+    /** 附件持久化：uploads/inquiries/{Ym}/{文章ID-随机}/，返回留档后的文件数组 */
     private static function persist_attachments(array $staged, int $record_id): array {
         if (!$staged) {
             return array();
@@ -972,7 +977,7 @@ final class Site_Inquiries_Plugin {
         if (get_post_type($post_id) !== self::POST_TYPE) {
             return;
         }
-        $files = (array) get_post_meta($post_id, 'site_inq_attachments', true);
+        $files = (array) get_post_meta($post_id, 'inquiry_attachments', true);
         $dirs  = array();
         foreach ($files as $file) {
             $path = self::norm((string) ($file['path'] ?? ''));
@@ -1274,7 +1279,7 @@ final class Site_Inquiries_Plugin {
         global $wpdb;
 
         $day = (string) current_time('Ymd');
-        $key = 'site_inq_seq_' . $day;
+        $key = 'inquiry_seq_' . $day;
 
         $wpdb->query($wpdb->prepare(
             "INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, '0', 'no')",
@@ -1521,7 +1526,7 @@ HTML;
         $headers  = array(
             'Content-Type: text/html; charset=UTF-8',
             // 客户直接回信就回到询盘收件箱，而不是 bounced 的发件人地址
-            'Reply-To: ' . (string) apply_filters('site_inquiries_recipient', get_option('admin_email')),
+            'Reply-To: ' . (string) apply_filters('eln_recipient', get_option('admin_email')),
         );
 
         $sent = self::mail($email, $subject, $body, $headers);
@@ -1532,7 +1537,7 @@ HTML;
          * @param string $email
          * @param array  $fields 本次提交的字段
          */
-        do_action('site_inquiries_autoreply_sent', $sent, $email, $fields);
+        do_action('eln_autoreply_sent', $sent, $email, $fields);
 
         return $sent;
     }
@@ -1693,19 +1698,19 @@ HTML;
 
     private static function store_inquiry(array $fields, string $body_html, string $inquiry_no = ''): int {
         $meta = array(
-            'site_inq_email'      => (string) ($fields['email'] ?? ''),
-            'site_inq_variant'    => (string) ($fields['formVariant'] ?? ''),
-            'site_inq_locale'     => (string) ($fields['locale'] ?? ''),
-            'site_inq_page_url'   => (string) ($fields['pageUrl'] ?? ''),
-            'site_inq_page_title' => (string) ($fields['pageTitle'] ?? ''),
-            'site_inq_page_title_en' => (string) ($fields['pageTitleEn'] ?? ''),
-            'site_inq_ip'         => self::client_ip(),
-            'site_inq_lang'       => (string) ($fields['browserLanguage'] ?? ''),
-            'site_inq_timezone'   => self::field_timezone($fields),
-            'site_inq_no'         => $inquiry_no,
+            'inquiry_email'      => (string) ($fields['email'] ?? ''),
+            'inquiry_variant'    => (string) ($fields['formVariant'] ?? ''),
+            'inquiry_locale'     => (string) ($fields['locale'] ?? ''),
+            'inquiry_page_url'   => (string) ($fields['pageUrl'] ?? ''),
+            'inquiry_page_title' => (string) ($fields['pageTitle'] ?? ''),
+            'inquiry_page_title_en' => (string) ($fields['pageTitleEn'] ?? ''),
+            'inquiry_ip'         => self::client_ip(),
+            'inquiry_lang'       => (string) ($fields['browserLanguage'] ?? ''),
+            'inquiry_timezone'   => self::field_timezone($fields),
+            'inquiry_no'         => $inquiry_no,
             // 记录本条出现过哪些字段（供后台动态列出标签项），与是否传了标签无关
-            'site_inq_fields'     => array_values(array_diff(array_keys($fields), self::META_FIELDS)),
-            'site_inq_field_labels' => (array) ($fields['fieldLabels'] ?? array()),
+            'inquiry_fields'     => array_values(array_diff(array_keys($fields), self::META_FIELDS)),
+            'inquiry_field_labels' => (array) ($fields['fieldLabels'] ?? array()),
         );
 
         $post_id = wp_insert_post(array(
@@ -1725,7 +1730,7 @@ HTML;
     /**
      * 给早期记录补编号。
      *
-     * site_inq_no 是后加的 meta，之前入库的询盘没有它，列表「编号」列就一直显示 —。
+     * inquiry_no 是后加的 meta，之前入库的询盘没有它，列表「编号」列就一直显示 —。
      * 按提交时间顺序补号，并把当天的流水计数器推到已用最大值，免得下一封询盘撞号。
      * 只跑一次（option 记账），之后完全零开销。
      */
@@ -1737,7 +1742,7 @@ HTML;
 
         $ids = $wpdb->get_col(
             "SELECT p.ID FROM {$wpdb->posts} p
-             LEFT JOIN {$wpdb->postmeta} m ON m.post_id = p.ID AND m.meta_key = 'site_inq_no'
+             LEFT JOIN {$wpdb->postmeta} m ON m.post_id = p.ID AND m.meta_key = 'inquiry_no'
              WHERE p.post_type = '" . self::POST_TYPE . "' AND m.meta_id IS NULL
              ORDER BY p.post_date ASC, p.ID ASC"
         );
@@ -1747,12 +1752,12 @@ HTML;
             $id  = (int) $id;
             $day = mysql2date('Ymd', (string) get_post_field('post_date', $id));
             $used[$day] = ($used[$day] ?? 0) + 1;
-            update_post_meta($id, 'site_inq_no', $day . str_pad((string) $used[$day], 3, '0', STR_PAD_LEFT));
+            update_post_meta($id, 'inquiry_no', $day . str_pad((string) $used[$day], 3, '0', STR_PAD_LEFT));
         }
 
         // 补出来的号已经占用了当天前 N 个流水位，计数器必须跟上
         foreach ($used as $day => $count) {
-            $key = 'site_inq_seq_' . $day;
+            $key = 'inquiry_seq_' . $day;
             if ((int) get_option($key, 0) < $count) {
                 update_option($key, $count, false);
             }
@@ -1861,9 +1866,9 @@ HTML;
             return;
         }
         // phpcs:ignore WordPress.Security.NonceVerification
-        $current = isset($_GET['site_inq_source']) ? trim(wp_unslash((string) $_GET['site_inq_source'])) : '';
+        $current = isset($_GET['inquiry_source']) ? trim(wp_unslash((string) $_GET['inquiry_source'])) : '';
 
-        echo '<select name="site_inq_source" style="max-width:260px;" onchange="this.form.submit()">';
+        echo '<select name="inquiry_source" style="max-width:260px;" onchange="this.form.submit()">';
         echo '<option value="">' . esc_html(self::t('all_sources')) . '</option>';
         foreach ($values as $value) {
             printf(
@@ -1881,7 +1886,7 @@ HTML;
         global $wpdb;
         $rows = $wpdb->get_col(
             "SELECT DISTINCT meta_value FROM {$wpdb->postmeta}
-             WHERE meta_key = 'site_inq_page_title_en' AND meta_value <> ''
+             WHERE meta_key = 'inquiry_page_title_en' AND meta_value <> ''
              ORDER BY meta_value ASC"
         );
         return array_values(array_filter(array_map('trim', (array) $rows), static fn($v) => $v !== ''));
@@ -1896,13 +1901,13 @@ HTML;
             return;
         }
         // phpcs:ignore WordPress.Security.NonceVerification
-        $value = isset($_GET['site_inq_source']) ? trim(wp_unslash((string) $_GET['site_inq_source'])) : '';
+        $value = isset($_GET['inquiry_source']) ? trim(wp_unslash((string) $_GET['inquiry_source'])) : '';
         if ($value === '') {
             return;
         }
         $query->set('meta_query', array(
             array(
-                'key'     => 'site_inq_page_title_en',
+                'key'     => 'inquiry_page_title_en',
                 'value'   => $value,
                 'compare' => '=',
             ),
@@ -1942,16 +1947,16 @@ HTML;
             return;
         }
         echo '<style>'
-            . '.fixed .column-site_inq_no{width:110px;}'
-            . '.fixed .column-site_inq_source{width:22%;}'
-            . '.fixed .column-site_inq_attachments{width:16%;}'
-            . '.fixed .column-site_inq_mail{width:9%;}'
+            . '.fixed .column-inquiry_no{width:110px;}'
+            . '.fixed .column-inquiry_source{width:22%;}'
+            . '.fixed .column-inquiry_attachments{width:16%;}'
+            . '.fixed .column-inquiry_mail{width:9%;}'
             . '</style>';
     }
 
     /** 主列固定为「客户」：WP 在没有 title 列时会把第一列（编号）当主列，行操作就挂到编号下面了 */
     public static function primary_column(string $column, string $screen_id): string {
-        return $screen_id === 'edit-' . self::POST_TYPE ? 'site_inq_name' : $column;
+        return $screen_id === 'edit-' . self::POST_TYPE ? 'inquiry_name' : $column;
     }
 
     /** 列表列：姓名（点击进详情）/ 邮箱 / 来源 / 附件 / 发信 / 日期 */
@@ -1960,12 +1965,12 @@ HTML;
         foreach ($columns as $key => $label) {
             if ($key === 'title') {
                 // 用「姓名」列取代「标题」列：姓名即详情入口，不与邮箱列重复
-                $new['site_inq_no']         = self::t('col_no');
-                $new['site_inq_name']       = self::t('col_name');
-                $new['site_inq_email']      = self::t('col_email');
-                $new['site_inq_source']     = self::t('col_source');
-                $new['site_inq_attachments'] = self::t('col_attachments');
-                $new['site_inq_mail']       = self::t('col_mail');
+                $new['inquiry_no']         = self::t('col_no');
+                $new['inquiry_name']       = self::t('col_name');
+                $new['inquiry_email']      = self::t('col_email');
+                $new['inquiry_source']     = self::t('col_source');
+                $new['inquiry_attachments'] = self::t('col_attachments');
+                $new['inquiry_mail']       = self::t('col_mail');
             } else {
                 $new[$key] = $label;
             }
@@ -1975,30 +1980,30 @@ HTML;
 
     public static function admin_column_content(string $column, int $post_id): void {
         switch ($column) {
-            case 'site_inq_no':
-                $no = (string) get_post_meta($post_id, 'site_inq_no', true);
+            case 'inquiry_no':
+                $no = (string) get_post_meta($post_id, 'inquiry_no', true);
                 echo $no !== ''
                     ? '<span style="font-family:Consolas,Monaco,monospace;font-size:12px;color:#50575e;">' . esc_html($no) . '</span>'
                     : '—';
                 break;
-            case 'site_inq_name':
+            case 'inquiry_name':
                 $view = admin_url('admin.php?page=' . self::VIEW_SLUG . '&id=' . $post_id);
                 echo '<a href="' . esc_url($view) . '"><strong>' . esc_html(get_the_title($post_id)) . '</strong></a>';
                 break;
-            case 'site_inq_email':
-                $email = get_post_meta($post_id, 'site_inq_email', true);
+            case 'inquiry_email':
+                $email = get_post_meta($post_id, 'inquiry_email', true);
                 echo $email ? '<a href="mailto:' . esc_attr($email) . '">' . esc_html($email) . '</a>' : '—';
                 break;
-            case 'site_inq_source':
-                $url = get_post_meta($post_id, 'site_inq_page_url', true);
+            case 'inquiry_source':
+                $url = get_post_meta($post_id, 'inquiry_page_url', true);
                 echo $url ? '<a href="' . esc_attr($url) . '" target="_blank" rel="noopener">' . esc_html(self::record_source_label($post_id)) . '</a>'
                           : esc_html(self::record_source_label($post_id));
                 break;
-            case 'site_inq_attachments':
+            case 'inquiry_attachments':
                 echo self::attachments_html($post_id, ', ');
                 break;
-            case 'site_inq_mail':
-                $sent = get_post_meta($post_id, 'site_inq_mail_sent', true);
+            case 'inquiry_mail':
+                $sent = get_post_meta($post_id, 'inquiry_mail_sent', true);
                 echo $sent === 'yes'
                     ? '<span style="color:#00a32a;">' . esc_html(self::t('mail_sent')) . '</span>'
                     : ($sent === 'no'
@@ -2010,12 +2015,12 @@ HTML;
 
     /** 单条记录的来源展示名：英文页面标题（表单类型），表单类型标注页面/弹窗 */
     private static function record_source_label(int $post_id): string {
-        $name    = (string) get_post_meta($post_id, 'site_inq_page_title_en', true);
+        $name    = (string) get_post_meta($post_id, 'inquiry_page_title_en', true);
         if ($name === '') {
-            $name = (string) get_post_meta($post_id, 'site_inq_page_title', true);
+            $name = (string) get_post_meta($post_id, 'inquiry_page_title', true);
         }
-        $url     = (string) get_post_meta($post_id, 'site_inq_page_url', true);
-        $variant = (string) get_post_meta($post_id, 'site_inq_variant', true);
+        $url     = (string) get_post_meta($post_id, 'inquiry_page_url', true);
+        $variant = (string) get_post_meta($post_id, 'inquiry_variant', true);
         if ($name === '' && $url !== '') {
             $path = parse_url($url, PHP_URL_PATH);
             $name = $path && $path !== '/' ? trim((string) $path, '/') : '';
@@ -2030,7 +2035,7 @@ HTML;
 
     /** 附件直链列表（新标签页浏览器打开；列表列与详情页共用） */
     private static function attachments_html(int $post_id, string $separator = '<br>'): string {
-        $files = (array) get_post_meta($post_id, 'site_inq_attachments', true);
+        $files = (array) get_post_meta($post_id, 'inquiry_attachments', true);
         if (!$files) {
             return '—';
         }
@@ -2059,8 +2064,8 @@ HTML;
                 'untrash-post_' . $post->ID
             );
             $permanent = wp_nonce_url(
-                admin_url('admin-post.php?action=site_inq_delete&id=' . $post->ID),
-                'site_inq_del_' . $post->ID
+                admin_url('admin-post.php?action=inquiry_delete&id=' . $post->ID),
+                'inquiry_del_' . $post->ID
             );
             return array(
                 'untrash' => '<a href="' . esc_url($restore) . '">' . esc_html(self::t('restore_action')) . '</a>',
@@ -2075,8 +2080,8 @@ HTML;
         );
         if (current_user_can('delete_posts')) {
             $url = wp_nonce_url(
-                admin_url('admin-post.php?action=site_inq_delete&id=' . $post->ID),
-                'site_inq_del_' . $post->ID
+                admin_url('admin-post.php?action=inquiry_delete&id=' . $post->ID),
+                'inquiry_del_' . $post->ID
             );
             $actions['delete'] = '<a href="' . esc_url($url) . '" style="color:#b32d2e;" onclick="return confirm(\''
                 . esc_js(self::t('confirm_delete')) . '\');">' . esc_html(self::t('delete_action')) . '</a>';
@@ -2090,19 +2095,19 @@ HTML;
             wp_die(esc_html(self::t('invalid_request')));
         }
         $post_id = isset($_GET['id']) ? absint($_GET['id']) : 0; // phpcs:ignore WordPress.Security.NonceVerification
-        check_admin_referer('site_inq_del_' . $post_id);
+        check_admin_referer('inquiry_del_' . $post_id);
         if (!$post_id || get_post_type($post_id) !== self::POST_TYPE) {
             wp_die(esc_html(self::t('not_found_msg')));
         }
         wp_delete_post($post_id, true); // before_delete_post 钩子会联动清理附件
-        wp_safe_redirect(add_query_arg('site_inq_deleted', 1, admin_url('edit.php?post_type=' . self::POST_TYPE)));
+        wp_safe_redirect(add_query_arg('inquiry_deleted', 1, admin_url('edit.php?post_type=' . self::POST_TYPE)));
         exit;
     }
 
     /** 删除成功提示 */
     public static function deleted_notice(): void {
         // phpcs:ignore WordPress.Security.NonceVerification
-        if (isset($_GET['site_inq_deleted']) && isset($_GET['post_type']) && $_GET['post_type'] === self::POST_TYPE) {
+        if (isset($_GET['inquiry_deleted']) && isset($_GET['post_type']) && $_GET['post_type'] === self::POST_TYPE) {
             printf('<div class="notice notice-success is-dismissible"><p>%s</p></div>', esc_html(self::t('deleted_notice')));
         }
     }
@@ -2172,14 +2177,14 @@ HTML;
             return;
         }
         wp_add_dashboard_widget(
-            'site_inquiries_recent',
+            'eln_recent',
             self::t('dash_title'),
             array(__CLASS__, 'render_dashboard_widget')
         );
     }
 
     public static function render_dashboard_widget(): void {
-        $limit = max(1, (int) apply_filters('site_inquiries_dashboard_limit', 5));
+        $limit = max(1, (int) apply_filters('eln_dashboard_limit', 5));
         $posts = get_posts(array(
             'post_type'   => self::POST_TYPE,
             'post_status' => 'publish',
@@ -2231,9 +2236,9 @@ HTML;
                             array('page' => self::VIEW_SLUG, 'id' => $item->ID),
                             admin_url('admin.php')
                         );
-                        $name   = (string) get_post_meta($item->ID, 'site_inq_name', true);
+                        $name   = (string) get_post_meta($item->ID, 'inquiry_name', true);
                         $name   = $name !== '' ? $name : $item->post_title;
-                        $email  = (string) get_post_meta($item->ID, 'site_inq_email', true);
+                        $email  = (string) get_post_meta($item->ID, 'inquiry_email', true);
                         $source = self::record_source_label($item->ID);
                         $sub    = implode(' · ', array_filter(array($email, $source)));
                         $when   = self::dash_date_label((int) get_post_time('U', true, $item));
@@ -2304,17 +2309,17 @@ HTML;
             wp_die(esc_html(self::t('not_found_msg')), '', array('response' => 404));
         }
 
-        $email     = (string) get_post_meta($post_id, 'site_inq_email', true);
-        $variant   = (string) get_post_meta($post_id, 'site_inq_variant', true);
-        $locale    = (string) get_post_meta($post_id, 'site_inq_locale', true);
-        $lang      = (string) get_post_meta($post_id, 'site_inq_lang', true);
-        $timezone  = (string) get_post_meta($post_id, 'site_inq_timezone', true);
-        $page_url  = (string) get_post_meta($post_id, 'site_inq_page_url', true);
-        $ip        = (string) get_post_meta($post_id, 'site_inq_ip', true);
-        $sent      = (string) get_post_meta($post_id, 'site_inq_mail_sent', true);
-        $replied   = (string) get_post_meta($post_id, 'site_inq_autoreply_sent', true);
-        $mail_err  = (string) get_post_meta($post_id, 'site_inq_mail_error', true);
-        $reply_err = (string) get_post_meta($post_id, 'site_inq_autoreply_error', true);
+        $email     = (string) get_post_meta($post_id, 'inquiry_email', true);
+        $variant   = (string) get_post_meta($post_id, 'inquiry_variant', true);
+        $locale    = (string) get_post_meta($post_id, 'inquiry_locale', true);
+        $lang      = (string) get_post_meta($post_id, 'inquiry_lang', true);
+        $timezone  = (string) get_post_meta($post_id, 'inquiry_timezone', true);
+        $page_url  = (string) get_post_meta($post_id, 'inquiry_page_url', true);
+        $ip        = (string) get_post_meta($post_id, 'inquiry_ip', true);
+        $sent      = (string) get_post_meta($post_id, 'inquiry_mail_sent', true);
+        $replied   = (string) get_post_meta($post_id, 'inquiry_autoreply_sent', true);
+        $mail_err  = (string) get_post_meta($post_id, 'inquiry_mail_error', true);
+        $reply_err = (string) get_post_meta($post_id, 'inquiry_autoreply_error', true);
         $submitted = get_the_date('Y-m-d H:i:s', $post);
 
         $variant_label = $variant === 'modal' ? self::t('form_modal')
@@ -2336,7 +2341,7 @@ HTML;
         };
 
         $meta_rows = array(
-            self::t('meta_no')          => esc_html((string) get_post_meta($post_id, 'site_inq_no', true) ?: '—'),
+            self::t('meta_no')          => esc_html((string) get_post_meta($post_id, 'inquiry_no', true) ?: '—'),
             self::t('col_email')        => $email !== '' ? '<a href="mailto:' . esc_attr($email) . '">' . esc_html($email) . '</a>' : '—',
             self::t('meta_form')        => esc_html($variant_label),
             self::t('meta_language')    => esc_html($locale !== '' ? $locale : '—'),
@@ -2351,7 +2356,7 @@ HTML;
         );
 
         $delete_url = current_user_can('delete_posts')
-            ? wp_nonce_url(admin_url('admin-post.php?action=site_inq_delete&id=' . $post_id), 'site_inq_del_' . $post_id)
+            ? wp_nonce_url(admin_url('admin-post.php?action=inquiry_delete&id=' . $post_id), 'inquiry_del_' . $post_id)
             : '';
         ?>
         <div class="wrap">
@@ -2394,12 +2399,12 @@ HTML;
 
     /** 两套模板各注册一个 option（分组不同，表单才互不覆盖） */
     public static function register_template_setting(): void {
-        register_setting('site_inquiries_template_group', self::OPT_TEMPLATE, array(
+        register_setting('eln_template_group', self::OPT_TEMPLATE, array(
             'type'              => 'array',
             'sanitize_callback' => array(__CLASS__, 'sanitize_template'),
             'default'           => array(),
         ));
-        register_setting('site_inquiries_autoreply_group', self::OPT_AUTOREPLY, array(
+        register_setting('eln_autoreply_group', self::OPT_AUTOREPLY, array(
             'type'              => 'array',
             'sanitize_callback' => array(__CLASS__, 'sanitize_autoreply'),
             'default'           => array(),
@@ -2574,29 +2579,29 @@ HTML;
         }
         // 测试发信 / 恢复默认都带上 kind（与 slot），nonce 也按 kind 分，免得在 A 标签页误伤 B 的配置
         $test  = wp_nonce_url(
-            add_query_arg($base_args, admin_url('admin-post.php?action=site_inq_test_mail')),
-            'site_inq_test_mail_' . $kind
+            add_query_arg($base_args, admin_url('admin-post.php?action=inquiry_test_mail')),
+            'inquiry_test_mail_' . $kind
         );
         $reset = wp_nonce_url(
-            add_query_arg($base_args, admin_url('admin-post.php?action=site_inq_reset_template')),
-            'site_inq_reset_template_' . $kind
+            add_query_arg($base_args, admin_url('admin-post.php?action=inquiry_reset_template')),
+            'inquiry_reset_template_' . $kind
         );
         $name  = self::option_name($kind);
-        $group = $is_auto ? 'site_inquiries_autoreply_group' : 'site_inquiries_template_group';
+        $group = $is_auto ? 'eln_autoreply_group' : 'eln_template_group';
 
         // phpcs:disable WordPress.Security.NonceVerification
         $notice = '';
-        if (isset($_GET['site_inq_test'])) {
-            $ok     = $_GET['site_inq_test'] === '1';
+        if (isset($_GET['inquiry_test'])) {
+            $ok     = $_GET['inquiry_test'] === '1';
             $notice = '<div class="notice ' . ($ok ? 'notice-success' : 'notice-error') . ' is-dismissible"><p>'
                     . esc_html(self::t($ok ? 'tpl_test_ok' : 'tpl_test_fail')) . '</p></div>';
-        } elseif (isset($_GET['site_inq_reset'])) {
+        } elseif (isset($_GET['inquiry_reset'])) {
             $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html(self::t('tpl_reset_done')) . '</p></div>';
-        } elseif (isset($_GET['site_inq_lang_added'])) {
+        } elseif (isset($_GET['inquiry_lang_added'])) {
             $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html(self::t('tpl_lang_added')) . '</p></div>';
-        } elseif (isset($_GET['site_inq_lang_deleted'])) {
+        } elseif (isset($_GET['inquiry_lang_deleted'])) {
             $notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html(self::t('tpl_lang_deleted')) . '</p></div>';
-        } elseif (isset($_GET['site_inq_lang_exists'])) {
+        } elseif (isset($_GET['inquiry_lang_exists'])) {
             $notice = '<div class="notice notice-warning is-dismissible"><p>' . esc_html(self::t('tpl_lang_exists')) . '</p></div>';
         }
         // phpcs:enable
@@ -2762,10 +2767,10 @@ HTML;
                                     // 默认组不可删；其它组的删除入口就放在各自的标签上
                                     $del_url = $i === 0 ? '' : wp_nonce_url(
                                         add_query_arg(
-                                            array('action' => 'site_inq_reply_dellang', 'slot' => $i),
+                                            array('action' => 'inquiry_reply_dellang', 'slot' => $i),
                                             admin_url('admin-post.php')
                                         ),
-                                        'site_inq_reply_lang_' . $i
+                                        'inquiry_reply_lang_' . $i
                                     );
                                     ?>
                                     <li class="si-lang-item<?php echo $del_url !== '' ? ' has-del' : ''; ?>">
@@ -2783,9 +2788,9 @@ HTML;
                                 <?php endforeach; ?>
                             </ul>
                             <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" class="si-lang-add">
-                                <input type="hidden" name="action" value="site_inq_reply_addlang" />
+                                <input type="hidden" name="action" value="inquiry_reply_addlang" />
                                 <?php // 独立字段名，避免和下面 settings_fields 的 _wpnonce 撞 id ?>
-                                <?php wp_nonce_field('site_inq_reply_lang', '_wpnonce_lang'); ?>
+                                <?php wp_nonce_field('inquiry_reply_lang', '_wpnonce_lang'); ?>
                                 <select name="newlang" aria-label="<?php echo esc_attr(self::t('tpl_lang_code')); ?>">
                                     <option value=""><?php echo esc_html(self::t('tpl_lang_add')); ?>…</option>
                                     <?php
@@ -2953,7 +2958,7 @@ HTML;
 
         $config = array(
             'ajax'         => admin_url('admin-ajax.php'),
-            'nonce'        => wp_create_nonce('site_inq_preview'),
+            'nonce'        => wp_create_nonce('inquiry_preview'),
             'codeSettings' => self::$code_editor_settings,
             'mediaTitle'   => self::t('tpl_media'),
             // 两个标签页共用一个渲染器：option 名与 kind 都从 PHP 传，JS 不写死
@@ -3103,7 +3108,7 @@ HTML;
       Array.prototype.forEach.call(els, function (el) {
         // 未勾选的复选框不会随表单提交，预览里也不该当成 enabled=1
         if (el.type === 'checkbox' && !el.checked) return;
-        // "site_inquiries_template[labels][fullName]" → "labels][fullName"，
+        // "eln_template[labels][fullName]" → "labels][fullName"，
         // 拼回去正好是 template[labels][fullName]，PHP 侧的嵌套解析照旧
         var inner = el.name.slice(prefix.length, el.name.length - 1);
         if (inner) out[inner] = el.value;
@@ -3113,7 +3118,7 @@ HTML;
 
     function refresh() {
       var params = new URLSearchParams();
-      params.set('action', 'site_inq_preview');
+      params.set('action', 'inquiry_preview');
       params.set('nonce', cfg.nonce);
       if (cfg.kind) params.set('kind', cfg.kind);
       var data = collect();
@@ -3160,7 +3165,7 @@ JS;
 
     /** 实时预览：拿表单里未保存的值渲染一封示例邮件 */
     public static function ajax_preview(): void {
-        check_ajax_referer('site_inq_preview', 'nonce');
+        check_ajax_referer('inquiry_preview', 'nonce');
         if (!current_user_can('manage_options')) {
             wp_send_json_error(array('message' => 'forbidden'), 403);
         }
@@ -3192,7 +3197,7 @@ JS;
     /**
      * 发一封测试邮件。
      *
-     * 收件人固定用询盘收件人（admin_email / filter site_inquiries_recipient），
+     * 收件人固定用询盘收件人（admin_email / filter eln_recipient），
      * 也就是 sales03@leflexo.com —— 两套模板都往同一个信箱发，方便对比。
      * 自动确认页发的是「当前语言组」的模板，不是默认组。
      */
@@ -3201,7 +3206,7 @@ JS;
             wp_die('Insufficient permissions.', '', array('response' => 403));
         }
         $kind = self::current_kind();
-        check_admin_referer('site_inq_test_mail_' . $kind);
+        check_admin_referer('inquiry_test_mail_' . $kind);
 
         if ($kind === 'autoreply') {
             $slots = self::reply_groups();
@@ -3218,7 +3223,7 @@ JS;
         }
         $body     = self::build_body($fields, array(), $tpl, '', $kind);
         $subject  = self::build_subject($fields, $tpl, $kind);
-        $to       = (string) apply_filters('site_inquiries_recipient', get_option('admin_email'));
+        $to       = (string) apply_filters('eln_recipient', get_option('admin_email'));
 
         // 和正式发信走同一个封装：补纯文本正文、失败原因也照同一套规则记录
         $sent = self::mail(
@@ -3229,7 +3234,7 @@ JS;
         );
 
         wp_safe_redirect(add_query_arg(
-            array('page' => self::TPL_SLUG, 'kind' => $kind, 'slot' => $slot, 'site_inq_test' => $sent ? '1' : '0'),
+            array('page' => self::TPL_SLUG, 'kind' => $kind, 'slot' => $slot, 'inquiry_test' => $sent ? '1' : '0'),
             admin_url('edit.php?post_type=' . self::POST_TYPE)
         ));
         exit;
@@ -3246,7 +3251,7 @@ JS;
             wp_die('Insufficient permissions.', '', array('response' => 403));
         }
         $kind = self::current_kind();
-        check_admin_referer('site_inq_reset_template_' . $kind);
+        check_admin_referer('inquiry_reset_template_' . $kind);
 
         $slot = 0;
         if ($kind === 'autoreply') {
@@ -3265,7 +3270,7 @@ JS;
         }
 
         wp_safe_redirect(add_query_arg(
-            array('page' => self::TPL_SLUG, 'kind' => $kind, 'slot' => $slot, 'site_inq_reset' => '1'),
+            array('page' => self::TPL_SLUG, 'kind' => $kind, 'slot' => $slot, 'inquiry_reset' => '1'),
             admin_url('edit.php?post_type=' . self::POST_TYPE)
         ));
         exit;
@@ -3276,7 +3281,7 @@ JS;
         if (!current_user_can('manage_options')) {
             wp_die('Insufficient permissions.', '', array('response' => 403));
         }
-        check_admin_referer('site_inq_reply_lang', '_wpnonce_lang');
+        check_admin_referer('inquiry_reply_lang', '_wpnonce_lang');
 
         // phpcs:ignore WordPress.Security.NonceVerification.Missing
         $lang = self::canonical_lang((string) sanitize_text_field(wp_unslash($_POST['newlang'] ?? '')));
@@ -3291,7 +3296,7 @@ JS;
 
         foreach ($groups as $i => $group) {
             if ($group['lang'] === $lang) {
-                wp_safe_redirect(add_query_arg('site_inq_lang_exists', 1, self::reply_slot_url($i)));
+                wp_safe_redirect(add_query_arg('inquiry_lang_exists', 1, self::reply_slot_url($i)));
                 exit;
             }
         }
@@ -3302,7 +3307,7 @@ JS;
             'groups'  => $groups,
         ), false);
 
-        wp_safe_redirect(add_query_arg('site_inq_lang_added', 1, self::reply_slot_url(count($groups) - 1)));
+        wp_safe_redirect(add_query_arg('inquiry_lang_added', 1, self::reply_slot_url(count($groups) - 1)));
         exit;
     }
 
@@ -3313,7 +3318,7 @@ JS;
         }
         // phpcs:ignore WordPress.Security.NonceVerification
         $slot = isset($_GET['slot']) ? max(0, (int) $_GET['slot']) : 0;
-        check_admin_referer('site_inq_reply_lang_' . $slot);
+        check_admin_referer('inquiry_reply_lang_' . $slot);
 
         $cfg    = self::tpl('autoreply');
         $groups = self::reply_groups($cfg);
@@ -3327,9 +3332,9 @@ JS;
             ), false);
         }
 
-        wp_safe_redirect(add_query_arg('site_inq_lang_deleted', 1, self::reply_slot_url(0)));
+        wp_safe_redirect(add_query_arg('inquiry_lang_deleted', 1, self::reply_slot_url(0)));
         exit;
     }
 }
 
-Site_Inquiries_Plugin::init();
+Email_Log_Notifications::init();
