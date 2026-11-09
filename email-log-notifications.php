@@ -2365,10 +2365,11 @@ HTML;
         }
         ?>
         <style>
-            /* 参考 WP「外观 → 主题详情」：全屏白底、左侧大预览、右侧信息栏、顶部箭头翻阅 */
-            .eln-modal{position:fixed;inset:0;z-index:100000;display:none;flex-direction:column;background:#fff;}
+            /* 参考 WP「外观 → 主题详情」：暗遮罩 + 居中大面板，左预览右信息栏，顶部箭头翻阅；字体沿用后台原生栈 */
+            .eln-modal{position:fixed;inset:0;z-index:100000;display:none;align-items:center;justify-content:center;padding:4vh 4vw;background:rgba(0,0,0,.7);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;font-size:13px;line-height:1.5;color:#1d2327;}
             .eln-modal.is-open{display:flex;}
-            .eln-modal__top{display:flex;align-items:center;flex:none;height:48px;}
+            .eln-modal__panel{width:min(1080px,100%);height:min(760px,100%);display:flex;flex-direction:column;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.3);}
+            .eln-modal__top{display:flex;align-items:center;flex:none;height:48px;border-bottom:1px solid #dcdcde;}
             .eln-modal__nav{display:flex;}
             .eln-modal__arrow{display:flex;align-items:center;justify-content:center;width:48px;height:48px;border:0;background:transparent;color:#2c3338;cursor:pointer;}
             .eln-modal__arrow svg{display:block;fill:none;stroke:#2c3338;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;}
@@ -2376,28 +2377,30 @@ HTML;
             .eln-modal__arrow:hover:not(:disabled) svg{stroke:#1d2327;}
             .eln-modal__arrow:disabled{color:#c3c4c7;cursor:default;}
             .eln-modal__arrow:disabled svg{stroke:#c3c4c7;}
-            .eln-modal__top .eln-modal__close{margin-left:auto;border:0;background:transparent;color:#646970;cursor:pointer;font-size:24px;line-height:1;padding:4px 16px;height:48px;}
+            .eln-modal__top .eln-modal__close{margin-left:auto;border:0;background:transparent;color:#646970;cursor:pointer;font-size:22px;line-height:1;padding:4px 16px;height:48px;}
             .eln-modal__top .eln-modal__close:hover{background:#f0f0f1;color:#1d2327;}
             .eln-modal__wrap{display:flex;flex:1;min-height:0;}
-            .eln-modal__main{flex:1;min-width:0;overflow:auto;padding:32px 40px;background:#fff;}
-            .eln-modal__stage{max-width:760px;margin:0 auto;border:1px solid #dcdcde;background:#fff;box-shadow:0 1px 8px rgba(0,0,0,.07);}
+            .eln-modal__main{flex:1;min-width:0;overflow:auto;padding:28px 32px;background:#f6f7f7;}
+            .eln-modal__stage{max-width:720px;margin:0 auto;border:1px solid #dcdcde;background:#fff;box-shadow:0 1px 8px rgba(0,0,0,.07);}
             .eln-modal__stage>*{display:block;padding:28px 32px;}
             .eln-modal__loading{text-align:center;color:#646970;padding:64px 0;border:0;box-shadow:none;}
-            .eln-modal__side{flex:none;width:320px;overflow:auto;padding:4px 24px 24px;border-left:1px solid #f0f0f1;}
-            .eln-modal__chip{display:inline-block;margin:16px 0 0;padding:2px 8px;border-radius:3px;font-size:12px;line-height:1.6;}
+            .eln-modal__side{flex:none;width:300px;overflow:auto;padding:20px 24px;border-left:1px solid #dcdcde;background:#fff;}
+            .eln-modal__chip{display:inline-block;padding:1px 8px;border-radius:3px;font-size:12px;line-height:1.7;}
             .eln-modal__chip.is-all{background:#edfaef;color:#00a32a;}
             .eln-modal__chip.is-partial{background:#fcf9e8;color:#996800;}
             .eln-modal__chip.is-none{background:#f0f0f1;color:#787c82;}
-            .eln-modal__title{margin:10px 0 2px;font-size:23px;font-weight:400;line-height:1.35;}
+            .eln-modal__title{margin:12px 0 2px;font-size:21px;font-weight:400;line-height:1.4;}
             .eln-modal__no{margin:0 0 14px;color:#646970;font-family:Consolas,Monaco,monospace;font-size:12px;}
             .eln-modal__fields{margin:0;}
             .eln-modal__fields dt{margin:14px 0 2px;color:#646970;font-size:12px;}
             .eln-modal__fields dd{margin:0;font-size:13px;word-break:break-all;}
-            .eln-modal__foot{display:flex;justify-content:flex-end;flex:none;padding:14px 24px;border-top:1px solid #dcdcde;}
-            @media (max-width:960px){
+            .eln-modal__foot{display:flex;justify-content:flex-end;flex:none;padding:12px 24px;border-top:1px solid #dcdcde;background:#fff;}
+            @media (max-width:782px){
+                .eln-modal{padding:0;}
+                .eln-modal__panel{width:100%;height:100%;}
                 .eln-modal__wrap{flex-direction:column;overflow:auto;}
                 .eln-modal__main{overflow:visible;padding:16px 16px 24px;}
-                .eln-modal__side{width:auto;border-left:0;padding-top:0;}
+                .eln-modal__side{width:auto;border-left:0;border-top:1px solid #dcdcde;}
             }
         </style>
         <div id="eln-modal" class="eln-modal" role="dialog" aria-modal="true"
@@ -2405,6 +2408,7 @@ HTML;
              data-nonce="<?php echo esc_attr(wp_create_nonce('eln_inquiry_detail')); ?>"
              data-loading="<?php echo esc_attr(self::t('modal_loading')); ?>"
              data-error="<?php echo esc_attr(self::t('modal_error')); ?>">
+            <div class="eln-modal__panel">
             <div class="eln-modal__top">
                 <div class="eln-modal__nav">
                     <button type="button" class="eln-modal__arrow eln-modal__prev" aria-label="<?php echo esc_attr(self::t('modal_prev')); ?>" disabled>
@@ -2438,6 +2442,7 @@ HTML;
             </div>
             <div class="eln-modal__foot">
                 <button type="button" class="button eln-modal__close"><?php echo esc_html(self::t('modal_close')); ?></button>
+            </div>
             </div>
         </div>
         <script>
