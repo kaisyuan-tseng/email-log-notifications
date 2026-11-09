@@ -62,8 +62,6 @@ final class Email_Log_Notifications {
     const POST_TYPE      = 'inquiry';
     const VIEW_SLUG      = 'inquiry-view';
     const TPL_SLUG       = 'inquiry-template';
-    /** 回信模板设置页 slug */
-    const REPLY_SLUG     = 'inquiry-reply';
     const HONEYPOT       = 'companyWebsite';
     /** 邮件模板设置存在这个 option 里 */
     const OPT_TEMPLATE   = 'eln_template';
@@ -299,8 +297,10 @@ final class Email_Log_Notifications {
             'modal_hint'              => 'Inquiry details',
             'modal_prev'              => 'Previous inquiry',
             'modal_next'              => 'Next inquiry',
-            'modal_reply'             => 'Reply',
-            'reply_menu'              => 'Reply Template',
+            'modal_reply'             => 'Email reply',
+            'modal_delete'            => 'Delete',
+            'reply_menu'              => 'Email reply template',
+            'reply_card_hint'         => 'Fills the subject and body of the mailto link behind the viewer\'s email reply button.',
             'reply_subject'           => 'Subject',
             'reply_body'              => 'Body',
             'reply_hint'              => 'Placeholders: {{name}} name, {{email}} email, {{no}} inquiry no., {{date}} submitted time, {{source}} source. Save empty to restore the defaults.',
@@ -418,8 +418,10 @@ final class Email_Log_Notifications {
             'modal_hint'              => '询盘内容',
             'modal_prev'              => '上一条询盘',
             'modal_next'              => '下一条询盘',
-            'modal_reply'             => '回信',
-            'reply_menu'              => '回信模板',
+            'modal_reply'             => '邮件回复',
+            'modal_delete'            => '删除',
+            'reply_menu'              => '邮件回复模板',
+            'reply_card_hint'         => '询盘弹窗里「邮件回复」按钮的 mailto 主题与正文骨架。',
             'reply_subject'           => '邮件主题',
             'reply_body'              => '邮件正文',
             'reply_hint'              => '可用占位符：{{name}} 姓名、{{email}} 邮箱、{{no}} 编号、{{date}} 提交时间、{{source}} 来源。全部留空保存即恢复默认。',
@@ -537,8 +539,10 @@ final class Email_Log_Notifications {
             'modal_hint'              => '詢盤內容',
             'modal_prev'              => '上一條詢盤',
             'modal_next'              => '下一條詢盤',
-            'modal_reply'             => '回覆',
-            'reply_menu'              => '回覆範本',
+            'modal_reply'             => '郵件回覆',
+            'modal_delete'            => '刪除',
+            'reply_menu'              => '郵件回覆範本',
+            'reply_card_hint'         => '詢盤彈窗裡「郵件回覆」按鈕的 mailto 主題與正文骨架。',
             'reply_subject'           => '郵件主題',
             'reply_body'              => '郵件正文',
             'reply_hint'              => '可用佔位符：{{name}} 姓名、{{email}} 郵箱、{{no}} 編號、{{date}} 提交時間、{{source}} 來源。全部留空儲存即恢復預設。',
@@ -2387,6 +2391,11 @@ HTML;
             'email'  => (string) get_post_meta($id, 'inquiry_email', true),
             'source' => self::record_source_label($id),
             'attach' => self::attachments_html($id), // 附件直链（与列表「附件」列同源）
+            // 弹窗「删除」按钮：与列表行操作同一端点、同一 nonce 口径；无权限时为 null。
+            // wp_nonce_url 会把 & 转成 &#038; 实体（那是给 HTML 属性用的），这里要走 JSON，得先还原成裸 &
+            'delete' => current_user_can('delete_posts')
+                ? htmlspecialchars_decode(wp_nonce_url(admin_url('admin-post.php?action=inquiry_delete&id=' . $id), 'inquiry_del_' . $id), ENT_QUOTES)
+                : null,
             'state'  => $state, // all | partial | none
             'status' => self::t('status_' . $state),
             // 正文是本插件 build_body() 生成的（用户值入库前已 esc_html），
@@ -2404,26 +2413,28 @@ HTML;
         }
         ?>
         <style>
-            /* 参考 WP「外观 → 主题详情」：暗遮罩 + 居中大面板，左预览右信息栏，顶部箭头翻阅；字体沿用后台原生栈 */
-            .eln-modal{position:fixed;inset:0;z-index:100000;display:none;align-items:center;justify-content:center;padding:4vh 4vw;background:rgba(0,0,0,.7);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;font-size:13px;line-height:1.5;color:#1d2327;}
-            .eln-modal.is-open{display:flex;}
-            .eln-modal__panel{width:min(1080px,100%);height:min(760px,100%);display:flex;flex-direction:column;background:#fff;box-shadow:0 10px 40px rgba(0,0,0,.3);}
-            .eln-modal__top{display:flex;align-items:center;flex:none;height:48px;border-bottom:1px solid #dcdcde;}
+            /* 整体照搬 WP「外观 → 主题详情」的 .theme-wrap：贴边大面板（无暗遮罩）、
+               48px 头部（左 ‹ › 相连 54px、右 × 50px，#dcdcde 分隔线）、
+               底部 #f6f7f7 操作条居中放按钮；字体沿用后台原生栈 */
+            .eln-modal{position:fixed;inset:0;z-index:100000;display:none;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;font-size:13px;line-height:1.5;color:#1d2327;}
+            .eln-modal.is-open{display:block;}
+            .eln-modal__panel{position:absolute;top:90px;right:30px;bottom:30px;left:190px;display:flex;flex-direction:column;background:#fff;box-shadow:0 1px 20px 5px rgba(0,0,0,.1);}
+            .eln-modal__top{position:relative;flex:none;height:48px;border-bottom:1px solid #dcdcde;}
             .eln-modal__nav{display:flex;}
-            .eln-modal__arrow{display:flex;align-items:center;justify-content:center;width:48px;height:48px;border:0;background:transparent;color:#2c3338;cursor:pointer;}
-            .eln-modal__arrow svg{display:block;fill:none;stroke:#2c3338;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;}
+            .eln-modal__arrow{display:inline-flex;align-items:center;justify-content:center;width:54px;height:48px;border:0;border-right:1px solid #dcdcde;background:transparent;color:#3c434a;cursor:pointer;vertical-align:top;}
+            .eln-modal__arrow svg{display:block;fill:none;stroke:#3c434a;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;}
             .eln-modal__arrow:hover:not(:disabled){background:#f0f0f1;color:#1d2327;}
             .eln-modal__arrow:hover:not(:disabled) svg{stroke:#1d2327;}
             .eln-modal__arrow:disabled{color:#c3c4c7;cursor:default;}
             .eln-modal__arrow:disabled svg{stroke:#c3c4c7;}
-            .eln-modal__top .eln-modal__close{margin-left:auto;border:0;background:transparent;color:#646970;cursor:pointer;font-size:22px;line-height:1;padding:4px 16px;height:48px;}
+            .eln-modal__top .eln-modal__close{position:absolute;top:0;right:0;display:inline-flex;align-items:center;justify-content:center;width:50px;height:48px;border:0;border-left:1px solid #dcdcde;background:transparent;color:#3c434a;cursor:pointer;font-size:20px;line-height:1;}
             .eln-modal__top .eln-modal__close:hover{background:#f0f0f1;color:#1d2327;}
             .eln-modal__wrap{display:flex;flex:1;min-height:0;}
-            .eln-modal__main{flex:1;min-width:0;overflow:auto;padding:28px 32px;background:#f6f7f7;}
+            .eln-modal__main{flex:1;min-width:0;overflow:auto;padding:28px 32px 40px;background:#fff;}
             .eln-modal__stage{max-width:720px;margin:0 auto;border:1px solid #dcdcde;background:#fff;box-shadow:0 1px 8px rgba(0,0,0,.07);}
             .eln-modal__stage>*{display:block;padding:28px 32px;}
             .eln-modal__loading{text-align:center;color:#646970;padding:64px 0;border:0;box-shadow:none;}
-            .eln-modal__side{flex:none;width:280px;overflow:auto;padding:20px 24px;border-left:1px solid #dcdcde;background:#fff;}
+            .eln-modal__side{flex:none;width:30%;min-width:280px;max-width:440px;overflow:auto;padding:20px 25px;background:#fff;}
             .eln-modal__chip{display:inline-block;padding:1px 8px;border-radius:3px;font-size:12px;line-height:1.7;}
             .eln-modal__chip.is-all{background:#edfaef;color:#00a32a;}
             .eln-modal__chip.is-partial{background:#fcf9e8;color:#996800;}
@@ -2434,7 +2445,15 @@ HTML;
             .eln-modal__fields dt{margin:14px 0 2px;color:#646970;font-size:12px;}
             .eln-modal__fields dd{margin:0;font-size:13px;word-break:break-word;}
             .eln-modal__fields dd .eln-mail-item{display:block;}
-            .eln-modal__foot{display:flex;justify-content:space-between;flex:none;padding:12px 24px;border-top:1px solid #dcdcde;background:#fff;}
+            .eln-modal__foot{flex:none;height:53px;display:flex;justify-content:center;align-items:center;gap:8px;padding:10px 25px 5px;background:#f6f7f7;border-top:1px solid #f0f0f1;}
+            /* 删除：与核心 .delete-theme 一致——默认红字透底，hover 红底白字红边 */
+            .eln-modal__delete{color:#b32d2e !important;border:1px solid transparent !important;background:transparent !important;}
+            .eln-modal__delete:hover{background:#b32d2e !important;border-color:#b32d2e !important;color:#fff !important;}
+            @media (max-width:782px){
+                .eln-modal__panel{top:0;right:0;bottom:0;left:0;}
+                .eln-modal__wrap{flex-direction:column;overflow:auto;}
+                .eln-modal__main{overflow:visible;padding:16px 16px 24px;}
+                .eln-modal__side{width:auto;max-width:none;border-top:1px solid #dcdcde;}
             @media (max-width:782px){
                 .eln-modal{padding:0;}
                 .eln-modal__panel{width:100%;height:100%;}
@@ -2449,7 +2468,8 @@ HTML;
              data-loading="<?php echo esc_attr(self::t('modal_loading')); ?>"
              data-error="<?php echo esc_attr(self::t('modal_error')); ?>"
              data-reply-subject="<?php echo esc_attr(self::reply_tpl()['subject']); ?>"
-             data-reply-body="<?php echo esc_attr(self::reply_tpl()['body']); ?>">
+             data-reply-body="<?php echo esc_attr(self::reply_tpl()['body']); ?>"
+             data-confirm-delete="<?php echo esc_attr(self::t('confirm_delete')); ?>">
             <div class="eln-modal__panel">
             <div class="eln-modal__top">
                 <div class="eln-modal__nav">
@@ -2484,8 +2504,8 @@ HTML;
                 </aside>
             </div>
             <div class="eln-modal__foot">
-                <a class="button eln-modal__reply" hidden><?php echo esc_html(self::t('modal_reply')); ?></a>
-                <button type="button" class="button eln-modal__close"><?php echo esc_html(self::t('modal_close')); ?></button>
+                <a class="button button-compact button-primary eln-modal__reply" hidden><?php echo esc_html(self::t('modal_reply')); ?></a>
+                <a class="button button-compact delete-theme eln-modal__delete" hidden><?php echo esc_html(self::t('modal_delete')); ?></a>
             </div>
             </div>
         </div>
@@ -2502,6 +2522,7 @@ HTML;
             var attach = modal.querySelector('.eln-modal__attach');
             var dateEl = modal.querySelector('.eln-modal__date');
             var reply  = modal.querySelector('.eln-modal__reply');
+            var del    = modal.querySelector('.eln-modal__delete');
             var prevB  = modal.querySelector('.eln-modal__prev');
             var nextB  = modal.querySelector('.eln-modal__next');
             var closers = modal.querySelectorAll('.eln-modal__close');
@@ -2562,6 +2583,9 @@ HTML;
                     if (body) { href += '&body=' + encodeURIComponent(body); }
                     reply.href = href;
                 }
+                del.hidden = !d.delete;
+                del.removeAttribute('href');
+                if (d.delete) { del.href = d.delete; }
             }
             function show(pos) {
                 if (pos < 0 || pos >= ids.length) { return; }
@@ -2589,6 +2613,7 @@ HTML;
                 email.textContent = ''; source.textContent = '';
                 attach.innerHTML = ''; dateEl.textContent = '';
                 reply.hidden = true; reply.removeAttribute('href');
+                del.hidden = true; del.removeAttribute('href');
                 chip.hidden = true;
                 closers[0].focus();
                 show(Math.max(0, ids.indexOf(String(id))));
@@ -2609,6 +2634,13 @@ HTML;
             });
             prevB.addEventListener('click', function () { show(current - 1); });
             nextB.addEventListener('click', function () { show(current + 1); });
+            del.addEventListener('click', function () {
+                var url = del.getAttribute('href');
+                if (!url) { return; }
+                if (window.confirm(modal.getAttribute('data-confirm-delete'))) {
+                    window.location.assign(url); // admin-post 处理完会 302 回列表页
+                }
+            });
             Array.prototype.forEach.call(closers, function (b) { b.addEventListener('click', close); });
             modal.addEventListener('click', function (e) { if (e.target === modal) { close(); } });
             document.addEventListener('keydown', function (e) {
@@ -2664,16 +2696,21 @@ HTML;
         $all_url = admin_url('edit.php?post_type=' . self::POST_TYPE);
         ?>
         <style>
-            /* 参照核心「活动 → 最近发布」：左边固定日期列 + 斑马纹 + 列表出血到挂件边缘 */
+            /* 参照核心「活动 → 最近发布」：左边固定日期列 + 斑马纹 + 列表出血到挂件边缘；末列是发信状态双圆点 */
             .si-dash { margin: 0 -12px; }
             .si-dash__meta { margin: 0 0 8px; padding: 0 12px; color: #646970; font-size: 12px; }
             .si-dash__list { margin: 0; padding: 0; list-style: none; }
-            .si-dash__item { display: grid; grid-template-columns: clamp(112px, calc(2vw + 88px), 150px) minmax(0, 1fr); column-gap: 10px; align-items: baseline; padding: 5px 12px; color: #646970; }
+            .si-dash__item { display: grid; grid-template-columns: clamp(112px, calc(2vw + 88px), 150px) minmax(0, 1fr) auto; column-gap: 10px; align-items: baseline; padding: 5px 12px; color: #646970; }
             .si-dash__item:nth-child(odd) { background-color: #f6f7f7; }
             .si-dash__date { font-variant-numeric: tabular-nums; }
             .si-dash__main { min-width: 0; }
             .si-dash__name { text-decoration: none; }
             .si-dash__sub { display: block; overflow: hidden; color: #646970; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+            .si-dash__mail { display: inline-flex; gap: 4px; align-self: center; }
+            .si-dash__dot { width: 8px; height: 8px; border-radius: 50%; }
+            .si-dash__dot.is-ok { background: #00a32a; }
+            .si-dash__dot.is-fail { background: #d63638; }
+            .si-dash__dot.is-none { box-shadow: inset 0 0 0 1.5px #c3c4c7; }
             .si-dash__empty { margin: 4px 0 0; padding: 0 12px; color: #646970; }
             .si-dash__foot { margin: 10px 0 0; padding: 0 12px; }
             .si-dash__foot .count { color: #646970; }
@@ -2699,6 +2736,17 @@ HTML;
                         $source = self::record_source_label($item->ID);
                         $sub    = implode(' · ', array_filter(array($email, $source)));
                         $when   = self::dash_date_label((int) get_post_time('U', true, $item));
+                        // 发信状态：两枚小圆点（询盘通知 / 自动确认），口径与列表一致
+                        $n_state = (string) get_post_meta($item->ID, 'inquiry_mail_sent', true);
+                        $r_state = (string) get_post_meta($item->ID, 'inquiry_autoreply_sent', true);
+                        $dot_cls = static function (string $s): string {
+                            return $s === 'yes' ? 'is-ok' : ($s === 'no' ? 'is-fail' : 'is-none');
+                        };
+                        $word2 = static function (string $s): string {
+                            return $s === 'yes' ? self::t('status_yes') : ($s === 'no' ? self::t('status_no') : self::t('status_none'));
+                        };
+                        $mail_title = self::t('label_notify') . '：' . $word2($n_state) . "\n"
+                                    . self::t('label_reply') . '：' . $word2($r_state);
                         ?>
                         <li class="si-dash__item">
                             <span class="si-dash__date"><?php echo esc_html($when); ?></span>
@@ -2707,6 +2755,9 @@ HTML;
                                 <?php if ($sub !== '') : ?>
                                     <span class="si-dash__sub"><?php echo esc_html($sub); ?></span>
                                 <?php endif; ?>
+                            </span>
+                            <span class="si-dash__mail" title="<?php echo esc_attr($mail_title); ?>">
+                                <i class="si-dash__dot <?php echo esc_attr($dot_cls($n_state)); ?>"></i><i class="si-dash__dot <?php echo esc_attr($dot_cls($r_state)); ?>"></i>
                             </span>
                         </li>
                     <?php endforeach; ?>
@@ -2802,14 +2853,7 @@ HTML;
             self::TPL_SLUG,
             array(__CLASS__, 'render_template_page')
         );
-        add_submenu_page(
-            'edit.php?post_type=' . self::POST_TYPE,
-            self::t('reply_menu'),
-            self::t('reply_menu'),
-            'manage_options',
-            self::REPLY_SLUG,
-            array(__CLASS__, 'render_reply_page')
-        );
+        // 回信模板不单独开页：作为一张卡片并进上面的「邮件模板」页（render_template_page 末尾）
     }
 
     /** 两套模板各注册一个 option（分组不同，表单才互不覆盖） */
@@ -2858,17 +2902,19 @@ HTML;
         );
     }
 
-    /** 「回信模板」设置页：mailto 的主题/正文骨架，弹窗「回信」按钮据此生成链接 */
-    public static function render_reply_page(): void {
+    /** 「回信模板」卡片：mailto 的主题/正文骨架，弹窗「回信」按钮据此生成链接；并进「邮件模板」页 */
+    public static function render_reply_card(): void {
         if (!current_user_can('manage_options')) {
-            wp_die(esc_html__('You do not have permission to access this page.', 'email-log-notifications'));
+            return;
         }
         $tpl = (array) get_option(self::OPT_REPLY, array());
         ?>
-        <div class="wrap">
-            <h1><?php echo esc_html(self::t('reply_menu')); ?></h1>
-            <p><?php echo esc_html(self::t('reply_hint')); ?></p>
-            <form method="post" action="options.php">
+        <div class="si-tpl-card" style="margin-top:20px;">
+            <div class="si-tpl-card__head">
+                <h2><?php echo esc_html(self::t('reply_menu')); ?></h2>
+                <span class="description"><?php echo esc_html(self::t('reply_card_hint')); ?></span>
+            </div>
+            <form method="post" action="options.php" class="si-tpl-card__body">
                 <?php settings_fields('eln_reply_group'); ?>
                 <table class="form-table" role="presentation">
                     <tr>
@@ -2879,11 +2925,12 @@ HTML;
                     </tr>
                     <tr>
                         <th scope="row"><label for="eln-reply-body"><?php echo esc_html(self::t('reply_body')); ?></label></th>
-                        <td><textarea class="large-text code" rows="10" id="eln-reply-body"
+                        <td><textarea class="large-text code" rows="8" id="eln-reply-body"
                                       name="<?php echo esc_attr(self::OPT_REPLY); ?>[body]"><?php echo esc_textarea((string) ($tpl['body'] ?? '')); ?></textarea></td>
                     </tr>
                 </table>
-                <?php submit_button(); ?>
+                <p class="description"><?php echo esc_html(self::t('reply_hint')); ?></p>
+                <?php submit_button(null, 'primary', 'submit', false); ?>
             </form>
         </div>
         <?php
@@ -3403,6 +3450,7 @@ HTML;
                     <p class="si-preview-note"><?php echo esc_html(self::t('tpl_sample_note')); ?>: Jane Doe &lt;jane.doe@example.com&gt;</p>
                 </div>
             </div>
+            <?php self::render_reply_card(); ?>
         </div>
         <?php
     }
