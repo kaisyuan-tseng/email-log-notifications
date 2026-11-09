@@ -2717,7 +2717,6 @@ HTML;
                     <span class="count">(<?php echo (int) $total; ?>)</span></a>
             </p>
         </div>
-        </div>
         <?php
     }
 
