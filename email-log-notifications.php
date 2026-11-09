@@ -2413,12 +2413,10 @@ HTML;
         }
         ?>
         <style>
-            /* 整体照搬 WP「外观 → 主题详情」的 .theme-wrap：贴边大面板（无暗遮罩）、
-               48px 头部（左 ‹ › 相连 54px、右 × 50px，#dcdcde 分隔线）、
-               底部 #f6f7f7 操作条居中放按钮；字体沿用后台原生栈 */
-            .eln-modal{position:fixed;inset:0;z-index:100000;display:none;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;font-size:13px;line-height:1.5;color:#1d2327;}
-            .eln-modal.is-open{display:block;}
-            .eln-modal__panel{position:absolute;top:90px;right:30px;bottom:30px;left:190px;display:flex;flex-direction:column;background:#fff;box-shadow:0 1px 20px 5px rgba(0,0,0,.1);}
+            /* 结构照搬 WP「外观 → 主题详情」的 .theme-wrap，但面板收窄居中（1080×720 封顶）+ 轻遮罩 */
+            .eln-modal{position:fixed;inset:0;z-index:100000;display:none;align-items:center;justify-content:center;padding:40px;background:rgba(0,0,0,.5);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;font-size:13px;line-height:1.5;color:#1d2327;}
+            .eln-modal.is-open{display:flex;}
+            .eln-modal__panel{position:relative;width:min(1080px,100%);height:min(720px,100%);display:flex;flex-direction:column;background:#fff;box-shadow:0 1px 20px 5px rgba(0,0,0,.1);}
             .eln-modal__top{position:relative;flex:none;height:48px;border-bottom:1px solid #dcdcde;}
             .eln-modal__nav{display:flex;}
             .eln-modal__arrow{display:inline-flex;align-items:center;justify-content:center;width:54px;height:48px;border:0;border-right:1px solid #dcdcde;background:transparent;color:#3c434a;cursor:pointer;vertical-align:top;}
