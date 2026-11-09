@@ -1817,6 +1817,10 @@ HTML;
             'inquiry_field_labels' => (array) ($fields['fieldLabels'] ?? array()),
         );
 
+        // 正文由 build_body() 生成（用户值入库前已 esc_html），要原样保留 rgba() 颜色。
+        // 非特权用户提交时 WP 会把 wp_filter_post_kses 挂到 content_save_pre 上，
+        // safecss_filter_attr 会把 rgba() 一类颜色剥掉（邮件页头白字变黑字的根因），这里临时摘掉再恢复。
+        kses_remove_filters();
         $post_id = wp_insert_post(array(
             'post_type'      => self::POST_TYPE,
             'post_status'    => 'publish',
@@ -1827,6 +1831,7 @@ HTML;
             'comment_status' => 'closed',
             'ping_status'    => 'closed',
         ), true);
+        kses_init_filters();
 
         return is_wp_error($post_id) ? 0 : (int) $post_id;
     }
@@ -1890,7 +1895,7 @@ HTML;
             'show_ui'             => true,
             'show_in_menu'        => true,
             'show_in_rest'        => false,
-            'menu_icon'           => 'dashicons-email-alt2',
+            'menu_icon'           => 'dashicons-email',
             'menu_position'       => 26,
             'supports'            => array('title', 'editor'),
             'capability_type'     => 'post',
@@ -2054,10 +2059,13 @@ HTML;
             . '.fixed .column-inquiry_no{width:110px;}'
             . '.fixed .column-inquiry_source{width:22%;}'
             . '.fixed .column-inquiry_attachments{width:16%;}'
-            . '.fixed .column-inquiry_mail{width:9%;}'
-            . '.eln-mail-status{display:inline-flex;align-items:center;line-height:1;}'
-            . '.eln-mail-dot{display:block;filter:drop-shadow(0 1px 1px rgba(0,0,0,.08));transition:transform .15s ease;}'
-            . '.eln-mail-status:hover .eln-mail-dot{transform:scale(1.1);}'
+            . '.fixed .column-inquiry_mail{width:120px;}'
+            . '.eln-mail-status{display:inline-block;}'
+            . '.eln-mail-item{display:block;font-size:12px;line-height:1.9;color:#50575e;white-space:nowrap;}'
+            . '.eln-mail-dot{display:inline-block;width:9px;height:9px;margin-right:6px;border-radius:50%;vertical-align:-1px;}'
+            . '.eln-mail-dot.is-ok{background:#00a32a;}'
+            . '.eln-mail-dot.is-fail{background:#d63638;}'
+            . '.eln-mail-dot.is-none{box-shadow:inset 0 0 0 1.5px #c3c4c7;}'
             . '</style>';
     }
 
@@ -2090,7 +2098,7 @@ HTML;
             case 'inquiry_no':
                 $no = (string) get_post_meta($post_id, 'inquiry_no', true);
                 echo $no !== ''
-                    ? '<span style="font-family:Consolas,Monaco,monospace;font-size:12px;color:#50575e;">' . esc_html($no) . '</span>'
+                    ? '<span style="font-size:12px;color:#50575e;">' . esc_html($no) . '</span>'
                     : '—';
                 break;
             case 'inquiry_name':
@@ -2113,9 +2121,9 @@ HTML;
     }
 
     /**
-     * 发信状态：三档圆形 = 两封邮件里「成功发出」的封数。
-     *   0 封 → 空心／1 封 → 下半填充／2 封 → 整圆填充
-     * 列表里不放文字；具体哪封发出、失败原因放 title，悬停可查。
+     * 发信状态：两行「圆点 + 名称」，每封邮件各一枚圆点。
+     *   已发送 = 绿点 / 发送失败 = 红点 / 未发送 = 灰描边空心
+     * 失败原因照旧放 title，悬停可查。
      */
     private static function mail_status_html(int $post_id): string {
         $notify  = (string) get_post_meta($post_id, 'inquiry_mail_sent', true);
@@ -2149,24 +2157,17 @@ HTML;
         );
         $title = $summary . "\n" . implode("\n", $lines);
 
-        // 扁平风：纯色 + 等宽描边，无渐变无高光；0=灰描边空心 / 1=半圆填充 / 2=整圆填充
-        $ink   = '#00a32a'; // WP 成功绿，扁平纯色
-        $track = '#c3c4c7';
-        $r     = 7.5;
-
-        $svg  = '<svg class="eln-mail-dot" width="18" height="18" viewBox="0 0 20 20" aria-hidden="true" focusable="false">';
-        if ($sent === 2) {
-            $svg .= '<circle cx="10" cy="10" r="' . $r . '" fill="' . $ink . '"/>';
-        } elseif ($sent === 1) {
-            $svg .= '<path d="M10 ' . (10 - $r) . ' A' . $r . ' ' . $r . ' 0 0 0 10 ' . (10 + $r) . ' Z" fill="' . $ink . '"/>';
-            $svg .= '<circle cx="10" cy="10" r="' . $r . '" fill="none" stroke="' . $ink . '" stroke-width="2"/>';
-        } else {
-            $svg .= '<circle cx="10" cy="10" r="' . $r . '" fill="none" stroke="' . $track . '" stroke-width="2"/>';
-        }
-        $svg .= '</svg>';
+        // 扁平小圆点：已发送绿 / 失败红 / 未发送灰环（样式在 admin_list_styles 里）
+        $item = static function (string $label, string $state): string {
+            $cls = $state === 'yes' ? 'is-ok' : ($state === 'no' ? 'is-fail' : 'is-none');
+            return '<span class="eln-mail-item"><i class="eln-mail-dot ' . $cls . '"></i>' . esc_html($label) . '</span>';
+        };
 
         return '<span class="eln-mail-status" title="' . esc_attr($title)
-             . '" aria-label="' . esc_attr($short) . '">' . $svg . '</span>';
+             . '" aria-label="' . esc_attr($short) . '">'
+             . $item(self::t('label_notify'), $notify)
+             . $item(self::t('label_reply'), $reply)
+             . '</span>';
     }
 
     /** 单条记录的来源展示名：英文页面标题（表单类型），表单类型标注页面/弹窗 */
@@ -2353,7 +2354,10 @@ HTML;
             'source' => self::record_source_label($id),
             'state'  => $state, // all | partial | none
             'status' => self::t('status_' . $state),
-            'html'   => wp_kses_post($post->post_content),
+            // 正文是本插件 build_body() 生成的（用户值入库前已 esc_html），
+            // 不走 wp_kses_post：它内部的 safecss_filter_attr 会剥掉 rgba() 颜色，
+            // 页头白字会变成后台黑字，和真实邮件显示不一致。
+            'html'   => $post->post_content,
         ));
     }
 
@@ -2390,7 +2394,7 @@ HTML;
             .eln-modal__chip.is-partial{background:#fcf9e8;color:#996800;}
             .eln-modal__chip.is-none{background:#f0f0f1;color:#787c82;}
             .eln-modal__title{margin:12px 0 2px;font-size:21px;font-weight:400;line-height:1.4;}
-            .eln-modal__no{margin:0 0 14px;color:#646970;font-family:Consolas,Monaco,monospace;font-size:12px;}
+            .eln-modal__no{margin:0 0 14px;color:#646970;font-size:12px;}
             .eln-modal__fields{margin:0;}
             .eln-modal__fields dt{margin:14px 0 2px;color:#646970;font-size:12px;}
             .eln-modal__fields dd{margin:0;font-size:13px;word-break:break-all;}
@@ -2720,7 +2724,10 @@ HTML;
 
             <h2 class="title"><?php echo esc_html(self::t('content_heading')); ?></h2>
             <div style="max-width:760px;background:#fff;border:1px solid #dcdcde;padding:16px;">
-                <?php echo wp_kses_post($post->post_content); ?>
+                <?php
+                // 正文由 build_body() 生成、用户值已转义；不过 kses 是为了保住 rgba() 颜色（见 ajax_inquiry_detail）。
+                echo $post->post_content; // phpcs:ignore WordPress.Security.EscapeOutput
+                ?>
             </div>
         </div>
         <?php
