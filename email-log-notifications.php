@@ -289,6 +289,10 @@ final class Email_Log_Notifications {
             'view_page_title'  => 'View Inquiry',
             'back'             => '← All Inquiries',
             'content_heading'  => 'Inquiry content',
+            'modal_close'             => 'Close',
+            'modal_loading'           => 'Loading…',
+            'modal_error'             => 'Could not load this inquiry.',
+            'modal_hint'              => 'Inquiry details',
             'form_page'        => 'Page form',
             'form_modal'       => 'Popup form',
             'email_subject'    => 'New inquiry from %s',
@@ -396,6 +400,10 @@ final class Email_Log_Notifications {
             'view_page_title'  => '查看询盘',
             'back'             => '← 返回所有询盘',
             'content_heading'  => '询盘内容',
+            'modal_close'             => '关闭',
+            'modal_loading'           => '加载中…',
+            'modal_error'             => '加载失败，请重试。',
+            'modal_hint'              => '询盘内容',
             'form_page'        => '页面表单',
             'form_modal'       => '弹窗表单',
             'email_subject'    => '收到新询盘：%s',
@@ -503,6 +511,10 @@ final class Email_Log_Notifications {
             'view_page_title'  => '檢視詢盤',
             'back'             => '← 返回所有詢盤',
             'content_heading'  => '詢盤內容',
+            'modal_close'             => '關閉',
+            'modal_loading'           => '載入中…',
+            'modal_error'             => '載入失敗，請重試。',
+            'modal_hint'              => '詢盤內容',
             'form_page'        => '頁面表單',
             'form_modal'       => '彈窗表單',
             'email_subject'    => '收到新詢盤：%s',
@@ -674,7 +686,7 @@ final class Email_Log_Notifications {
         add_action('admin_init', array(__CLASS__, 'backfill_numbers'));
 
         add_filter('manage_' . self::POST_TYPE . '_posts_columns', array(__CLASS__, 'admin_columns'));
-        // 主列 = 客户：没有 title 列时 WP 会把第一列（编号）当主列，行操作会挂到编号下面
+        // 主列 = 编号：行操作（查看/删除）挂在编号下面；客户、来源两列都是纯文本
         add_filter('list_table_primary_column', array(__CLASS__, 'primary_column'), 10, 2);
         add_action('manage_' . self::POST_TYPE . '_posts_custom_column', array(__CLASS__, 'admin_column_content'), 10, 2);
         // 列表页只保留「全部 / 回收站」两个视图，批量操作只留「移动至回收站」
@@ -697,6 +709,9 @@ final class Email_Log_Notifications {
         add_action('admin_post_inquiry_reply_addlang', array(__CLASS__, 'handle_add_reply_lang'));
         add_action('admin_post_inquiry_reply_dellang', array(__CLASS__, 'handle_delete_reply_lang'));
         add_action('admin_enqueue_scripts', array(__CLASS__, 'enqueue_template_assets'));
+        // 询盘列表：查看弹窗（AJAX 取正文）与弹窗骨架
+        add_action('wp_ajax_eln_inquiry_detail', array(__CLASS__, 'ajax_inquiry_detail'));
+        add_action('admin_footer', array(__CLASS__, 'print_list_modal'));
         add_action('admin_print_footer_scripts', array(__CLASS__, 'print_template_script'));
         // 仪表盘「最近询盘」小挂件
         add_action('wp_dashboard_setup', array(__CLASS__, 'register_dashboard_widget'));
@@ -1096,7 +1111,7 @@ final class Email_Log_Notifications {
      * 提交者 IP：**只认服务端识别**（X-Real-IP / X-Forwarded-For / REMOTE_ADDR），
      * 前端上报的一律忽略——同源 nginx 反代已经带上真实来源，前端传的只是自证，
      * 既不可信也没有额外价值（穿透场景下两边看到的都是回环地址）。
-     * 限流用的也是这个值，全站同一把尺子。
+     * 限流标识另算（见 rate_identity()）：优先真实公网 IP，回环时改用访客 cookie。
      */
     private static function client_ip(): string {
         foreach (array('HTTP_X_REAL_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR') as $key) {
@@ -2031,12 +2046,15 @@ HTML;
             . '.fixed .column-inquiry_source{width:22%;}'
             . '.fixed .column-inquiry_attachments{width:16%;}'
             . '.fixed .column-inquiry_mail{width:9%;}'
+            . '.eln-mail-status{display:inline-flex;align-items:center;line-height:1;}'
+            . '.eln-mail-dot{display:block;filter:drop-shadow(0 1px 1px rgba(0,0,0,.08));transition:transform .15s ease;}'
+            . '.eln-mail-status:hover .eln-mail-dot{transform:scale(1.1);}'
             . '</style>';
     }
 
     /** 主列固定为「客户」：WP 在没有 title 列时会把第一列（编号）当主列，行操作就挂到编号下面了 */
     public static function primary_column(string $column, string $screen_id): string {
-        return $screen_id === 'edit-' . self::POST_TYPE ? 'inquiry_name' : $column;
+        return $screen_id === 'edit-' . self::POST_TYPE ? 'inquiry_no' : $column;
     }
 
     /** 列表列：姓名（点击进详情）/ 邮箱 / 来源 / 附件 / 发信 / 日期 */
@@ -2067,17 +2085,14 @@ HTML;
                     : '—';
                 break;
             case 'inquiry_name':
-                $view = admin_url('admin.php?page=' . self::VIEW_SLUG . '&id=' . $post_id);
-                echo '<a href="' . esc_url($view) . '"><strong>' . esc_html(get_the_title($post_id)) . '</strong></a>';
+                echo '<strong>' . esc_html(get_the_title($post_id)) . '</strong>';
                 break;
             case 'inquiry_email':
                 $email = get_post_meta($post_id, 'inquiry_email', true);
                 echo $email ? '<a href="mailto:' . esc_attr($email) . '">' . esc_html($email) . '</a>' : '—';
                 break;
             case 'inquiry_source':
-                $url = get_post_meta($post_id, 'inquiry_page_url', true);
-                echo $url ? '<a href="' . esc_attr($url) . '" target="_blank" rel="noopener">' . esc_html(self::record_source_label($post_id)) . '</a>'
-                          : esc_html(self::record_source_label($post_id));
+                echo esc_html(self::record_source_label($post_id));
                 break;
             case 'inquiry_attachments':
                 echo self::attachments_html($post_id, ', ');
@@ -2090,8 +2105,8 @@ HTML;
 
     /**
      * 发信状态：三档圆形 = 两封邮件里「成功发出」的封数。
-     *   0 封 → 空心圆（未发送）／1 封 → 半填圆（部分发送）／2 封 → 全填圆（已全部发送）
-     * 具体哪封发出、哪封失败以及 SMTP 报错都放进 title，悬停可查。
+     *   0 封 → 空心／1 封 → 下半填充／2 封 → 整圆填充
+     * 列表里不放文字；具体哪封发出、失败原因放 title，悬停可查。
      */
     private static function mail_status_html(int $post_id): string {
         $notify  = (string) get_post_meta($post_id, 'inquiry_mail_sent', true);
@@ -2125,19 +2140,31 @@ HTML;
         );
         $title = $summary . "\n" . implode("\n", $lines);
 
-        // 圆：0=只描边，1=左半填充，2=整圆填充；描边始终保留，三档一眼可分
-        $svg = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false"'
-             . ' style="vertical-align:middle;margin-right:5px;">';
+        // 每行的渐变/裁剪 id 必须唯一，否则同一列表页会串色
+        $grad = 'eln-mail-grad-' . $post_id;
+        $clip = 'eln-mail-clip-' . $post_id;
+        $accent = '#04979e';
+
+        $svg  = '<svg class="eln-mail-dot" width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" focusable="false">';
+        $svg .= '<defs>'
+              . '<linearGradient id="' . $grad . '" x1="0" y1="0" x2="0" y2="1">'
+              . '<stop offset="0" stop-color="#5bc6cb"/><stop offset="1" stop-color="#067c83"/>'
+              . '</linearGradient>'
+              . '<clipPath id="' . $clip . '"><circle cx="10" cy="10" r="7"/></clipPath>'
+              . '</defs>';
+        $svg .= '<circle cx="10" cy="10" r="8.25" fill="#fff"/>';
         if ($sent === 2) {
-            $svg .= '<circle cx="7" cy="7" r="6" fill="#00a32a"/>';
+            $svg .= '<circle cx="10" cy="10" r="7" fill="url(#' . $grad . ')"/>';
+            $svg .= '<circle cx="7.4" cy="7" r="1.6" fill="#fff" opacity=".22"/>';
         } elseif ($sent === 1) {
-            $svg .= '<path d="M7 1 A6 6 0 0 0 7 13 Z" fill="#00a32a"/>';
+            $svg .= '<rect x="2" y="10" width="16" height="8" fill="url(#' . $grad . ')" clip-path="url(#' . $clip . ')"/>';
         }
-        $svg .= '<circle cx="7" cy="7" r="6" fill="none" stroke="#8c8f94" stroke-width="1.5"/>';
+        $svg .= '<circle cx="10" cy="10" r="8.25" fill="none" stroke="'
+              . ($sent === 0 ? '#c3c4c7' : $accent) . '" stroke-width="1.5"/>';
         $svg .= '</svg>';
 
-        return '<span title="' . esc_attr($title) . '" aria-label="' . esc_attr($short) . '"'
-             . ' style="white-space:nowrap;">' . $svg . esc_html($short) . '</span>';
+        return '<span class="eln-mail-status" title="' . esc_attr($title)
+             . '" aria-label="' . esc_attr($short) . '">' . $svg . '</span>';
     }
 
     /** 单条记录的来源展示名：英文页面标题（表单类型），表单类型标注页面/弹窗 */
@@ -2202,8 +2229,8 @@ HTML;
         }
 
         $actions = array(
-            'view' => '<a href="' . esc_url(admin_url('admin.php?page=' . self::VIEW_SLUG . '&id=' . $post->ID))
-                    . '">' . esc_html(self::t('view_action')) . '</a>',
+            'view' => '<a class="eln-open" href="' . esc_url(admin_url('admin.php?page=' . self::VIEW_SLUG . '&id=' . $post->ID))
+                    . '" data-id="' . (int) $post->ID . '">' . esc_html(self::t('view_action')) . '</a>',
         );
         if (current_user_can('delete_posts')) {
             $url = wp_nonce_url(
@@ -2296,6 +2323,131 @@ HTML;
         }
     }
 
+    /* ---------------------------------------------------------------- 查看弹窗 */
+
+    /** AJAX：取一条询盘的正文，给列表页的「查看」弹窗用 */
+    public static function ajax_inquiry_detail(): void {
+        check_ajax_referer('eln_inquiry_detail', 'nonce');
+        if (!current_user_can('read')) {
+            wp_send_json_error(array('message' => 'forbidden'), 403);
+        }
+
+        $id   = isset($_GET['id']) ? absint($_GET['id']) : 0; // phpcs:ignore WordPress.Security.NonceVerification
+        $post = $id ? get_post($id) : null;
+        if (!$post || $post->post_type !== self::POST_TYPE) {
+            wp_send_json_error(array('message' => 'not found'), 404);
+        }
+
+        wp_send_json_success(array(
+            'no'    => (string) get_post_meta($id, 'inquiry_no', true),
+            'title' => get_the_title($post),
+            'date'  => get_the_date('Y-m-d H:i', $post),
+            'html'  => wp_kses_post($post->post_content),
+        ));
+    }
+
+    /** 列表页打印弹窗骨架 + 样式 + 脚本（参考 WP「外观 → 主题详情」的覆盖层） */
+    public static function print_list_modal(): void {
+        $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+        if (!$screen || $screen->id !== 'edit-' . self::POST_TYPE) {
+            return;
+        }
+        ?>
+        <style>
+            .eln-modal{position:fixed;inset:0;z-index:100000;display:none;align-items:flex-start;justify-content:center;padding:5vh 16px;background:rgba(20,25,30,.72);}
+            .eln-modal.is-open{display:flex;}
+            .eln-modal__panel{width:min(880px,100%);max-height:90vh;display:flex;flex-direction:column;overflow:hidden;background:#fff;border-radius:6px;box-shadow:0 24px 70px rgba(0,0,0,.4);}
+            .eln-modal__head{display:flex;align-items:center;gap:14px;flex:none;padding:16px 22px;border-bottom:1px solid #dcdcde;}
+            .eln-modal__title{margin:0;font-size:18px;font-weight:600;line-height:1.4;}
+            .eln-modal__meta{margin-left:auto;color:#646970;font-size:12px;white-space:nowrap;}
+            .eln-modal__head .eln-modal__close{border:0;background:transparent;color:#646970;cursor:pointer;font-size:24px;line-height:1;padding:4px 8px;border-radius:4px;}
+            .eln-modal__head .eln-modal__close:hover{background:#f0f0f1;color:#1d2327;}
+            .eln-modal__body{flex:1;overflow:auto;padding:22px;background:#f6f7f7;}
+            .eln-modal__body>*{max-width:760px;margin:0 auto;}
+            .eln-modal__loading{text-align:center;color:#646970;padding:48px 0;}
+            .eln-modal__foot{display:flex;justify-content:flex-end;flex:none;padding:12px 22px;border-top:1px solid #dcdcde;}
+        </style>
+        <div id="eln-modal" class="eln-modal" role="dialog" aria-modal="true"
+             aria-label="<?php echo esc_attr(self::t('modal_hint')); ?>"
+             data-nonce="<?php echo esc_attr(wp_create_nonce('eln_inquiry_detail')); ?>"
+             data-loading="<?php echo esc_attr(self::t('modal_loading')); ?>"
+             data-error="<?php echo esc_attr(self::t('modal_error')); ?>">
+            <div class="eln-modal__panel">
+                <div class="eln-modal__head">
+                    <h2 class="eln-modal__title"></h2>
+                    <span class="eln-modal__meta"></span>
+                    <button type="button" class="eln-modal__close" aria-label="<?php echo esc_attr(self::t('modal_close')); ?>">&times;</button>
+                </div>
+                <div class="eln-modal__body"></div>
+                <div class="eln-modal__foot">
+                    <button type="button" class="button eln-modal__close"><?php echo esc_html(self::t('modal_close')); ?></button>
+                </div>
+            </div>
+        </div>
+        <script>
+        (function () {
+            var modal = document.getElementById('eln-modal');
+            if (!modal) { return; }
+            var head   = modal.querySelector('.eln-modal__head');
+            var title  = modal.querySelector('.eln-modal__title');
+            var meta   = modal.querySelector('.eln-modal__meta');
+            var body   = modal.querySelector('.eln-modal__body');
+            var closers = modal.querySelectorAll('.eln-modal__close');
+            var lastFocus = null;
+
+            function loading(text) {
+                body.innerHTML = '<p class="eln-modal__loading"></p>';
+                body.firstChild.textContent = text;
+            }
+            function open(id) {
+                lastFocus = document.activeElement;
+                modal.classList.add('is-open');
+                document.body.style.overflow = 'hidden';
+                title.textContent = '';
+                meta.textContent = '';
+                loading(modal.getAttribute('data-loading'));
+                head.querySelector('.eln-modal__close').focus();
+
+                var url = ajaxurl + '?action=eln_inquiry_detail&id=' + encodeURIComponent(id)
+                        + '&nonce=' + encodeURIComponent(modal.getAttribute('data-nonce'));
+                fetch(url, { credentials: 'same-origin' })
+                    .then(function (r) { return r.json(); })
+                    .then(function (j) {
+                        if (!j || !j.success) { throw new Error('failed'); }
+                        title.textContent = j.data.title || '';
+                        meta.textContent = (j.data.no ? '#' + j.data.no + ' \u00b7 ' : '') + (j.data.date || '');
+                        body.innerHTML = j.data.html || '';
+                    })
+                    .catch(function () { loading(modal.getAttribute('data-error')); });
+            }
+            function close() {
+                modal.classList.remove('is-open');
+                document.body.style.overflow = '';
+                if (lastFocus && lastFocus.focus) { lastFocus.focus(); }
+            }
+
+            document.addEventListener('click', function (e) {
+                var link = e.target.closest && e.target.closest('.eln-open');
+                if (link) {
+                    e.preventDefault();
+                    open(link.getAttribute('data-id'));
+                } else if (e.target === modal) {
+                    close();
+                }
+            });
+            Array.prototype.forEach.call(closers, function (b) { b.addEventListener('click', close); });
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && modal.classList.contains('is-open')) { close(); }
+            });
+
+            // 仪表盘点名字跳过来：带 eln_view=<id> 自动打开同一弹窗
+            var auto = new URLSearchParams(window.location.search).get('eln_view');
+            if (auto) { open(auto); }
+        })();
+        </script>
+        <?php
+    }
+
     /* ---------------------------------------------------------------- 仪表盘 */
 
     /** 仪表盘「最近询盘」小挂件：只有能看询盘列表的用户才显示 */
@@ -2360,8 +2512,8 @@ HTML;
                 <ul class="si-dash__list">
                     <?php foreach ($posts as $item) :
                         $detail = add_query_arg(
-                            array('page' => self::VIEW_SLUG, 'id' => $item->ID),
-                            admin_url('admin.php')
+                            array('post_type' => self::POST_TYPE, 'eln_view' => $item->ID),
+                            admin_url('edit.php')
                         );
                         $name   = (string) get_post_meta($item->ID, 'inquiry_name', true);
                         $name   = $name !== '' ? $name : $item->post_title;

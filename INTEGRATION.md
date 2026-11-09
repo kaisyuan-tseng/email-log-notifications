@@ -73,7 +73,13 @@ fieldLabels[outerDiameter]=外径
 
 ### 2.5 蜜罐
 
-隐藏字段 `companyWebsite`，正常用户不填。**非空即判定机器人**：返回 `200 {"sent":true}`，但不入库、不发信。
+隐藏字段 `companyWebsite`：移出视口、`tabindex="-1"`、`aria-hidden="true"`、`autocomplete="off"`，正常用户看不到也不会填；机器人遍历表单字段时容易中招。**非空即判定机器人**：返回 `200 {"sent":true}`，但不入库、不发信，也不消耗限流配额（判定在限流之前）。
+
+#### 2.5.1 提交频率限制
+
+同一可信请求标识 **1 分钟最多 3 次、1 小时最多 10 次**。两个都是固定窗口，各自按该窗口内首次提交起算，到点自动清零；超限时返回 `429`，响应体带 `retry_after`、响应头带 `Retry-After`（秒）。被拒的请求本身不计数，等过窗口即可恢复。
+
+标识优先取 `X-Forwarded-For` / `X-Real-IP` / `REMOTE_ADDR` 链里第一个公网 IP；本站 frp 是 TCP 穿透，nginx 看到的源地址恒为 `127.0.0.1`，因此退化成服务端签发的 HttpOnly cookie `eln_vid`（前端脚本读不到也改不了），每个访客一个桶。要按真实公网 IP 分桶，需在穿透层启用 PROXY protocol 或改用 http 代理，届时代码会自动切过去。
 
 ### 2.6 询盘编号
 
@@ -87,7 +93,7 @@ fieldLabels[outerDiameter]=外径
 
 | 数据 | 谁采集 | 说明 |
 |---|---|---|
-| IP | **WordPress** | 依次读 `X-Real-IP` → `X-Forwarded-For`（第一段）→ `REMOTE_ADDR`，`FILTER_VALIDATE_IP` 通过才用；全站限流用的也是这个值 |
+| IP | **WordPress** | 依次读 `X-Real-IP` → `X-Forwarded-For`（第一段）→ `REMOTE_ADDR`，`FILTER_VALIDATE_IP` 通过才用；这是邮件/入库里记录的来源 IP，**限流标识另算**（见 §2.5.1） |
 | 浏览器语言 `browserLanguage` | 前端 | `navigator.languages?.[0] \|\| navigator.language`，如 `zh-CN` |
 | 用户时区 `timezone` | 前端 | `Intl.DateTimeFormat().resolvedOptions().timeZone`，如 `Asia/Shanghai` |
 
@@ -113,10 +119,10 @@ if (tz) data.append("timezone", tz);
 | 缺必填 | 400 | `{"code":"inquiry_missing_field", ...}` |
 | 邮箱非法 | 400 | `{"code":"inquiry_invalid_email", ...}` |
 | 附件不合规 | 400 | `{"code":"inquiry_bad_upload","message":"File type .exe is not allowed."}` |
-| 触发限流 | 429 | `{"code":"inquiry_rate_limited", ...}` |
+| 触发限流 | 429 | `{"code":"inquiry_rate_limited","retry_after":N, ...}`，响应头 `Retry-After: N` |
 | 发信失败 | 500 | `{"code":"inquiry_mail_failed", ...}` |
 
-前端只需要区分 `2xx` / 非 `2xx`；错误文案用站点自己的兜底提示。
+前端区分 `2xx` / `429` / 其它非 `2xx`：429 用「提交太频繁，请稍后再试」专属提示，其余走通用失败提示。
 
 ### 2.9 邮件模板（询盘通知 + 自动确认）
 
@@ -298,8 +304,9 @@ async function submit() {
 
 ## 6. 安全与限制
 
-- 蜜罐 `companyWebsite`：非空静默成功，不入库不发信。
-- 限流：公网 IP 30 次/小时；回环/私网退化成一个全局桶 60 次/小时（穿透场景下源 IP 恒为回环）。
+- 蜜罐 `companyWebsite`：非空静默成功，不入库不发信，也不消耗限流配额。
+- 限流：同一访客 1 分钟 3 次 / 1 小时 10 次（双固定窗口），超限 429 + `Retry-After`；标识优先公网 IP，回环时用服务端签发的 HttpOnly `eln_vid`（详见 §2.5.1）。
+- 前端对 429 显示「提交太频繁」专属提示，其余非 2xx 用通用失败提示。
 - 附件只校验扩展名与大小；落盘目录名含随机串，实际不可枚举。
 - 只接受 `multipart/form-data`；发 JSON 会被判为"缺必填字段"。
 - 请求体上限：nginx `client_max_body_size 60m`、PHP `post_max_size 64m`。
