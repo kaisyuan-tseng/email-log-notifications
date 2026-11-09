@@ -295,6 +295,7 @@ final class Email_Log_Notifications {
             'modal_hint'              => 'Inquiry details',
             'modal_prev'              => 'Previous inquiry',
             'modal_next'              => 'Next inquiry',
+            'modal_reply'             => 'Reply',
             'detail_time'             => 'Submitted',
             'form_page'        => 'Page form',
             'form_modal'       => 'Popup form',
@@ -409,6 +410,7 @@ final class Email_Log_Notifications {
             'modal_hint'              => '询盘内容',
             'modal_prev'              => '上一条询盘',
             'modal_next'              => '下一条询盘',
+            'modal_reply'             => '回信',
             'detail_time'             => '提交时间',
             'form_page'        => '页面表单',
             'form_modal'       => '弹窗表单',
@@ -523,6 +525,7 @@ final class Email_Log_Notifications {
             'modal_hint'              => '詢盤內容',
             'modal_prev'              => '上一條詢盤',
             'modal_next'              => '下一條詢盤',
+            'modal_reply'             => '回覆',
             'detail_time'             => '提交時間',
             'form_page'        => '頁面表單',
             'form_modal'       => '彈窗表單',
@@ -804,6 +807,21 @@ final class Email_Log_Notifications {
 
         // 环境数据（浏览器语言 / 时区）先验一遍；前端自报的 ip 直接丢弃，改用服务端识别
         $fields = self::normalize_env_fields($fields);
+
+        // 文本长度上限（与前端 maxlength 一致）：超长截断，防止绕过前端的请求灌大文本
+        $length_limits = (array) apply_filters('eln_length_limits', array(
+            'fullName'    => 80,
+            'email'       => 254,
+            'message'     => 2000,
+            'application' => 100,
+            'pageTitle'   => 200,
+            'pageTitleEn' => 200,
+        ));
+        foreach ($length_limits as $key => $max) {
+            if (isset($fields[$key]) && is_string($fields[$key]) && mb_strlen($fields[$key]) > $max) {
+                $fields[$key] = mb_substr($fields[$key], 0, $max);
+            }
+        }
 
         /**
          * 必填字段：默认 fullName / email / message（本站契约）。
@@ -2352,6 +2370,7 @@ HTML;
             'date'   => get_the_date('Y-m-d H:i', $post),
             'email'  => (string) get_post_meta($id, 'inquiry_email', true),
             'source' => self::record_source_label($id),
+            'attach' => self::attachments_html($id), // 附件直链（与列表「附件」列同源）
             'state'  => $state, // all | partial | none
             'status' => self::t('status_' . $state),
             // 正文是本插件 build_body() 生成的（用户值入库前已 esc_html），
@@ -2388,13 +2407,18 @@ HTML;
             .eln-modal__stage{max-width:720px;margin:0 auto;border:1px solid #dcdcde;background:#fff;box-shadow:0 1px 8px rgba(0,0,0,.07);}
             .eln-modal__stage>*{display:block;padding:28px 32px;}
             .eln-modal__loading{text-align:center;color:#646970;padding:64px 0;border:0;box-shadow:none;}
-            .eln-modal__side{flex:none;width:240px;overflow:auto;padding:20px 24px;border-left:1px solid #dcdcde;background:#fff;}
+            .eln-modal__side{flex:none;width:280px;overflow:auto;padding:20px 24px;border-left:1px solid #dcdcde;background:#fff;}
             .eln-modal__chip{display:inline-block;padding:1px 8px;border-radius:3px;font-size:12px;line-height:1.7;}
             .eln-modal__chip.is-all{background:#edfaef;color:#00a32a;}
             .eln-modal__chip.is-partial{background:#fcf9e8;color:#996800;}
             .eln-modal__chip.is-none{background:#f0f0f1;color:#787c82;}
-            .eln-modal__title{margin:12px 0 2px;font-size:21px;font-weight:400;line-height:1.4;}
-            .eln-modal__no{margin:0;color:#646970;font-size:12px;}
+            .eln-modal__title{margin:0 0 2px;font-size:21px;font-weight:400;line-height:1.4;}
+            .eln-modal__no{margin:0 0 10px;color:#646970;font-size:12px;}
+            .eln-modal__fields{margin:0;}
+            .eln-modal__fields dt{margin:14px 0 2px;color:#646970;font-size:12px;}
+            .eln-modal__fields dd{margin:0;font-size:13px;word-break:break-word;}
+            .eln-modal__fields dd .eln-mail-item{display:block;}
+            .eln-modal__reply{display:inline-block;margin-top:20px;}
             .eln-modal__foot{display:flex;justify-content:flex-end;flex:none;padding:12px 24px;border-top:1px solid #dcdcde;background:#fff;}
             @media (max-width:782px){
                 .eln-modal{padding:0;}
@@ -2426,9 +2450,22 @@ HTML;
                     <div class="eln-modal__stage"></div>
                 </div>
                 <aside class="eln-modal__side">
-                    <span class="eln-modal__chip" hidden></span>
                     <h2 class="eln-modal__title"></h2>
                     <p class="eln-modal__no"></p>
+                    <dl class="eln-modal__fields">
+                        <dt><?php echo esc_html(self::t('col_email')); ?></dt>
+                        <dd class="eln-modal__email"></dd>
+                        <dt><?php echo esc_html(self::t('col_source')); ?></dt>
+                        <dd class="eln-modal__source"></dd>
+                        <dt><?php echo esc_html(self::t('col_attachments')); ?></dt>
+                        <dd class="eln-modal__attach"></dd>
+                        <dt><?php echo esc_html(self::t('col_mail')); ?></dt>
+                        <dd><span class="eln-modal__chip" hidden></span></dd>
+                        <dt><?php echo esc_html(self::t('detail_time')); ?></dt>
+                        <dd class="eln-modal__date"></dd>
+                    </dl>
+                    <a class="button eln-modal__reply" hidden
+                       aria-label="<?php echo esc_attr(self::t('modal_reply')); ?>"><?php echo esc_html(self::t('modal_reply')); ?></a>
                 </aside>
             </div>
             <div class="eln-modal__foot">
@@ -2444,6 +2481,11 @@ HTML;
             var chip   = modal.querySelector('.eln-modal__chip');
             var title  = modal.querySelector('.eln-modal__title');
             var noEl   = modal.querySelector('.eln-modal__no');
+            var email  = modal.querySelector('.eln-modal__email');
+            var source = modal.querySelector('.eln-modal__source');
+            var attach = modal.querySelector('.eln-modal__attach');
+            var dateEl = modal.querySelector('.eln-modal__date');
+            var reply  = modal.querySelector('.eln-modal__reply');
             var prevB  = modal.querySelector('.eln-modal__prev');
             var nextB  = modal.querySelector('.eln-modal__next');
             var closers = modal.querySelectorAll('.eln-modal__close');
@@ -2480,9 +2522,17 @@ HTML;
                 stage.innerHTML = d.html || '';
                 title.textContent = d.title || '';
                 noEl.textContent = d.no ? 'No. ' + d.no : '';
+                email.textContent = d.email || '\u2014';
+                source.textContent = d.source || '\u2014';
+                attach.innerHTML = d.attach || '\u2014';
+                dateEl.textContent = d.date || '\u2014';
                 chip.hidden = !(d.state && d.status);
                 chip.textContent = d.status || '';
                 chip.className = 'eln-modal__chip' + (d.state ? ' is-' + d.state : '');
+                reply.hidden = !d.email;
+                if (d.email) {
+                    reply.href = 'mailto:' + d.email + '?subject=' + encodeURIComponent('Re: ' + (d.no ? d.no + ' ' : '') + (d.title || ''));
+                }
             }
             function show(pos) {
                 if (pos < 0 || pos >= ids.length) { return; }
@@ -2507,6 +2557,9 @@ HTML;
                 modal.classList.add('is-open');
                 document.body.style.overflow = 'hidden';
                 title.textContent = ''; noEl.textContent = '';
+                email.textContent = ''; source.textContent = '';
+                attach.innerHTML = ''; dateEl.textContent = '';
+                reply.hidden = true; reply.removeAttribute('href');
                 chip.hidden = true;
                 closers[0].focus();
                 show(Math.max(0, ids.indexOf(String(id))));
