@@ -212,7 +212,7 @@ final class Email_Log_Notifications {
             'not_found'        => 'No inquiries yet.',
             'not_found_trash'  => 'No inquiries in Trash.',
             'col_no'           => 'No.',
-            'col_name'         => 'Customer',
+            'col_name'         => 'Contact',
             'col_email'        => 'Email',
             'col_source'       => 'Source',
             'col_attachments'  => 'Attachments',
@@ -326,7 +326,7 @@ final class Email_Log_Notifications {
             'not_found'        => '暂无询盘。',
             'not_found_trash'  => '回收站中没有询盘。',
             'col_no'           => '编号',
-            'col_name'         => '客户',
+            'col_name'         => '联系人',
             'col_email'        => '邮箱',
             'col_source'       => '来源',
             'col_attachments'  => '附件',
@@ -440,7 +440,7 @@ final class Email_Log_Notifications {
             'not_found'        => '尚無詢盤。',
             'not_found_trash'  => '回收站中沒有詢盤。',
             'col_no'           => '編號',
-            'col_name'         => '客戶',
+            'col_name'         => '聯絡人',
             'col_email'        => '郵箱',
             'col_source'       => '來源',
             'col_attachments'  => '附件',
@@ -1187,7 +1187,7 @@ final class Email_Log_Notifications {
      */
     private static function th_style(): string {
         return 'text-align:left;vertical-align:top;padding:12px 16px 12px 0;'
-             . 'border-bottom:1px solid #eaeaea;width:130px;font-size:13px;color:#222222;'
+             . 'border-bottom:1px solid #eaeaea;width:96px;font-size:13px;color:#222222;'
              . 'font-weight:600;line-height:1.6;' . self::font_stack();
     }
 
@@ -2388,16 +2388,13 @@ HTML;
             .eln-modal__stage{max-width:720px;margin:0 auto;border:1px solid #dcdcde;background:#fff;box-shadow:0 1px 8px rgba(0,0,0,.07);}
             .eln-modal__stage>*{display:block;padding:28px 32px;}
             .eln-modal__loading{text-align:center;color:#646970;padding:64px 0;border:0;box-shadow:none;}
-            .eln-modal__side{flex:none;width:300px;overflow:auto;padding:20px 24px;border-left:1px solid #dcdcde;background:#fff;}
+            .eln-modal__side{flex:none;width:240px;overflow:auto;padding:20px 24px;border-left:1px solid #dcdcde;background:#fff;}
             .eln-modal__chip{display:inline-block;padding:1px 8px;border-radius:3px;font-size:12px;line-height:1.7;}
             .eln-modal__chip.is-all{background:#edfaef;color:#00a32a;}
             .eln-modal__chip.is-partial{background:#fcf9e8;color:#996800;}
             .eln-modal__chip.is-none{background:#f0f0f1;color:#787c82;}
             .eln-modal__title{margin:12px 0 2px;font-size:21px;font-weight:400;line-height:1.4;}
-            .eln-modal__no{margin:0 0 14px;color:#646970;font-size:12px;}
-            .eln-modal__fields{margin:0;}
-            .eln-modal__fields dt{margin:14px 0 2px;color:#646970;font-size:12px;}
-            .eln-modal__fields dd{margin:0;font-size:13px;word-break:break-all;}
+            .eln-modal__no{margin:0;color:#646970;font-size:12px;}
             .eln-modal__foot{display:flex;justify-content:flex-end;flex:none;padding:12px 24px;border-top:1px solid #dcdcde;background:#fff;}
             @media (max-width:782px){
                 .eln-modal{padding:0;}
@@ -2432,16 +2429,6 @@ HTML;
                     <span class="eln-modal__chip" hidden></span>
                     <h2 class="eln-modal__title"></h2>
                     <p class="eln-modal__no"></p>
-                    <dl class="eln-modal__fields">
-                        <dt><?php echo esc_html(self::t('col_email')); ?></dt>
-                        <dd class="eln-modal__email"></dd>
-                        <dt><?php echo esc_html(self::t('col_source')); ?></dt>
-                        <dd class="eln-modal__source"></dd>
-                        <dt><?php echo esc_html(self::t('detail_time')); ?></dt>
-                        <dd class="eln-modal__date"></dd>
-                        <dt><?php echo esc_html(self::t('col_mail')); ?></dt>
-                        <dd class="eln-modal__status"></dd>
-                    </dl>
                 </aside>
             </div>
             <div class="eln-modal__foot">
@@ -2457,10 +2444,6 @@ HTML;
             var chip   = modal.querySelector('.eln-modal__chip');
             var title  = modal.querySelector('.eln-modal__title');
             var noEl   = modal.querySelector('.eln-modal__no');
-            var email  = modal.querySelector('.eln-modal__email');
-            var source = modal.querySelector('.eln-modal__source');
-            var dateEl = modal.querySelector('.eln-modal__date');
-            var status = modal.querySelector('.eln-modal__status');
             var prevB  = modal.querySelector('.eln-modal__prev');
             var nextB  = modal.querySelector('.eln-modal__next');
             var closers = modal.querySelectorAll('.eln-modal__close');
@@ -2497,10 +2480,6 @@ HTML;
                 stage.innerHTML = d.html || '';
                 title.textContent = d.title || '';
                 noEl.textContent = d.no ? 'No. ' + d.no : '';
-                email.textContent = d.email || '\u2014';
-                source.textContent = d.source || '\u2014';
-                dateEl.textContent = d.date || '\u2014';
-                status.textContent = d.status || '\u2014';
                 chip.hidden = !(d.state && d.status);
                 chip.textContent = d.status || '';
                 chip.className = 'eln-modal__chip' + (d.state ? ' is-' + d.state : '');
@@ -2528,8 +2507,6 @@ HTML;
                 modal.classList.add('is-open');
                 document.body.style.overflow = 'hidden';
                 title.textContent = ''; noEl.textContent = '';
-                email.textContent = ''; source.textContent = '';
-                dateEl.textContent = ''; status.textContent = '';
                 chip.hidden = true;
                 closers[0].focus();
                 show(Math.max(0, ids.indexOf(String(id))));
