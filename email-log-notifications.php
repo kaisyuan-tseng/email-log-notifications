@@ -24,7 +24,8 @@
  *   - 环境数据：browserLanguage / timezone 由前端采集（服务端校验后入库）；
  *     IP 一律由 WordPress 从 X-Real-IP / X-Forwarded-For / REMOTE_ADDR 识别，前端传了也丢弃
  *   - 附件：drawings[]（单个 ≤20MB）、pictures[]（单个 ≤10MB），扩展名白名单
- *   - 蜜罐字段 companyWebsite：非空即机器人，静默丢弃
+ *   - 蜜罐字段 companyWebsite：非空即机器人，静默丢弃（不消耗限流配额）
+ *   - 限流：同一可信请求标识 1 分钟 3 次 / 1 小时 10 次，超限 429 + Retry-After
  *
  * 附件留档：保存到 wp-content/uploads/inquiries/{年月}/{文章ID-随机}/
  *   （在 uploads 下，主站 nginx 与 WP 两个域都能直接打开；随机目录名防猜测）；
@@ -128,10 +129,17 @@ final class Email_Log_Notifications {
             'ext' => array('png', 'jpg', 'jpeg', 'webp')),
     );
 
-    /** 单个公网 IP 每小时最多提交次数 */
-    const RATE_LIMIT = 30;
-    /** 无法区分用户时（穿透/反代后源 IP 恒为回环）的全局每小时上限 */
-    const RATE_LIMIT_GLOBAL = 60;
+    /**
+     * 双窗口提交频率限制（同一可信请求标识）：
+     * 1 分钟最多 3 次、1 小时最多 10 次。两个窗口都是固定窗口，按首次提交起算，
+     * 到点自动清零；超限时返回 429 + Retry-After，期间不再放行。
+     */
+    const RATE_MINUTE_LIMIT = 3;
+    const RATE_HOUR_LIMIT   = 10;
+    const RATE_MINUTE_TTL   = 60;
+    const RATE_HOUR_TTL     = 3600;
+    /** 访客标识 cookie：服务端签发、HttpOnly，脚本读不到 */
+    const RATE_VISITOR_COOKIE = 'eln_vid';
 
     /** 字段表展示顺序 */
     private const FIELD_ORDER = array(
@@ -208,7 +216,18 @@ final class Email_Log_Notifications {
             'col_email'        => 'Email',
             'col_source'       => 'Source',
             'col_attachments'  => 'Attachments',
-            'col_mail'         => 'Mail',
+            'col_mail'         => 'Email status',
+            'status_none'             => 'Not sent',
+            'status_partial'          => 'Partly sent',
+            'status_all'              => 'All sent',
+            'status_none_hint'        => 'Neither the inquiry notification nor the auto-confirmation was sent',
+            'status_notify_only'      => 'Only the inquiry notification was sent',
+            'status_reply_only'       => 'Only the auto-confirmation was sent',
+            'status_all_hint'         => 'Both the inquiry notification and the auto-confirmation were sent',
+            'status_yes'              => 'Sent',
+            'status_no'               => 'Failed',
+            'label_notify'            => 'Inquiry notification',
+            'label_reply'             => 'Auto-confirmation',
             'view_trash'       => 'Trash',
             'all_sources'      => 'All sources',
             'tpl_menu'         => 'Email template',
@@ -219,24 +238,24 @@ final class Email_Log_Notifications {
             'dash_total'       => '%d in total',
             'dash_empty'       => 'No inquiries yet.',
             'dash_all'         => 'View all inquiries',
-            'tpl_intro'        => 'The notification email is one HTML source you edit directly — the preview on the right renders this exact code.',
+            'tpl_intro'        => 'The email template is one HTML source you edit directly — the preview on the right renders this exact code.',
             'tpl_subject'      => 'Subject',
             'tpl_subject_hint' => 'Tokens: {{name}} {{email}} — same braces as the body. Leave empty to use the default wording.',
             'tpl_html'         => 'Email HTML source',
             'tpl_html_hint'    => 'This is the complete email body — the header text lives here too: look for the <!-- 表头标题 --> comment and edit that line. {{...}} tokens are filled with inquiry data. Clear it and save to restore the default.',
-            'tpl_tab_notify'   => 'Notification',
+            'tpl_tab_notify'   => 'Inquiry notification',
             'tpl_tab_reply'    => 'Auto-confirmation',
             'tpl_reply_on'     => 'Enable auto-confirmation',
-            'tpl_reply_on_hint' => 'When on, the visitor immediately receives this confirmation at the address they typed. Reply-To points at the inquiry inbox.',
+            'tpl_reply_on_hint' => 'When on, the visitor immediately receives the auto-confirmation at the address they typed. Reply-To points at the inquiry inbox.',
             'tpl_lang_bar'     => 'Language',
             'tpl_lang_default' => 'Default group',
             'tpl_lang_code'    => 'Language',
-            'tpl_lang_add'     => 'Add language',
-            'tpl_lang_delete'  => 'Delete this language',
-            'tpl_lang_delete_confirm' => 'Delete this language and its template?',
-            'tpl_lang_added'   => 'Language added.',
-            'tpl_lang_deleted' => 'Language deleted.',
-            'tpl_lang_exists'  => 'That language already exists.',
+            'tpl_lang_add'     => 'Add language group',
+            'tpl_lang_delete'  => 'Delete this language group',
+            'tpl_lang_delete_confirm' => 'Delete this language group and its template?',
+            'tpl_lang_added'   => 'Language group added.',
+            'tpl_lang_deleted' => 'Language group deleted.',
+            'tpl_lang_exists'  => 'That language group already exists.',
             'tpl_lang_hint'    => 'Matched against the visitor’s browser language ({{lang}}): full tag first (zh-CN), then the primary language (zh). Anything unmatched uses the “Default group” — the one template with no language attached.',
             'tpl_reply_labels_hint' => 'These labels only affect {{rows}} in this language group. Leave empty to use the wording the form itself submitted.',
             'tpl_lang_default_hint' => 'Used when the visitor’s browser language matches no language group',
@@ -260,9 +279,6 @@ final class Email_Log_Notifications {
             'tpl_labels'       => 'Field labels',
             'tpl_labels_hint'  => 'Labels come from the form that submitted the inquiry. Anything set here overrides them; leave empty to fall back to the field name itself.',
             'tpl_labels_sample' => 'These are sample fields for now; once the first inquiry arrives they switch to the real ones.',
-            'mail_sent'        => '✓ sent',
-            'mail_failed'      => '✕ failed',
-            'mail_none'        => '—',
             'view_action'      => 'View',
             'restore_action'   => 'Restore',
             'delete_action'    => 'Delete',
@@ -272,25 +288,13 @@ final class Email_Log_Notifications {
             'not_found_msg'    => 'Inquiry not found.',
             'view_page_title'  => 'View Inquiry',
             'back'             => '← All Inquiries',
-            'details_heading'  => 'Submission details',
             'content_heading'  => 'Inquiry content',
-            'meta_no'          => 'Inquiry #',
-            'meta_form'        => 'Form',
-            'meta_language'    => 'Language',
-            'meta_source'      => 'Source',
-            'meta_attachments' => 'Attachments',
-            'meta_submitted'   => 'Submitted',
-            'meta_mail'        => 'Mail',
             'form_page'        => 'Page form',
             'form_modal'       => 'Popup form',
             'email_subject'    => 'New inquiry from %s',
-            'foot_lang'        => 'Browser language',
-            'foot_tz'          => 'Timezone',
-            'foot_ip'          => 'IP',
             'row_attachments'  => 'Attachments',
             'read_only'        => 'Inquiries are read-only. Open them from the Inquiries list.',
             'email_subject_reply' => 'We received your inquiry',
-            'meta_autoreply'   => 'Auto-confirmation',
             'fields'           => array(
                 'fullName'            => 'Full Name',
                 'email'               => 'Email',
@@ -319,18 +323,29 @@ final class Email_Log_Notifications {
             'col_email'        => '邮箱',
             'col_source'       => '来源',
             'col_attachments'  => '附件',
-            'col_mail'         => '发信',
+            'col_mail'         => '发信状态',
+            'status_none'             => '未发送',
+            'status_partial'          => '部分发送',
+            'status_all'              => '已全部发送',
+            'status_none_hint'        => '询盘通知、自动确认均未发送',
+            'status_notify_only'      => '仅发送询盘通知',
+            'status_reply_only'       => '仅发送自动确认',
+            'status_all_hint'         => '询盘通知、自动确认均已发送',
+            'status_yes'              => '已发送',
+            'status_no'               => '发送失败',
+            'label_notify'            => '询盘通知',
+            'label_reply'             => '自动确认',
             'view_trash'       => '回收站',
-            'all_sources'      => '全部来源',
+            'all_sources'      => '所有来源',
             'tpl_menu'         => '邮件模板',
             'dash_title'       => '最近询盘',
             'dash_today_at'    => '今天 %s',
             'dash_yesterday_at' => '昨天 %s',
             'dash_today'       => '今天 %d 条',
             'dash_total'       => '共 %d 条',
-            'dash_empty'       => '还没有收到询盘。',
-            'dash_all'         => '查看全部询盘',
-            'tpl_intro'        => '通知邮件就是一份可直接编辑的 HTML 源码，右侧预览按它实时渲染。',
+            'dash_empty'       => '暂无询盘。',
+            'dash_all'         => '查看所有询盘',
+            'tpl_intro'        => '邮件模板就是可直接编辑的 HTML 源码，右侧预览按它实时渲染。',
             'tpl_subject'      => '邮件主题',
             'tpl_subject_hint' => '可用变量：{{name}} {{email}}（与正文同一套花括号）；留空用默认文案。',
             'tpl_html'         => '邮件模板源码（HTML）',
@@ -338,16 +353,16 @@ final class Email_Log_Notifications {
             'tpl_tab_notify'   => '询盘通知',
             'tpl_tab_reply'    => '自动确认',
             'tpl_reply_on'     => '启用自动确认',
-            'tpl_reply_on_hint' => '开启后，访客提交成功会立刻收到这封确认邮件（发到表单里填的邮箱，Reply-To 指向询盘收件人）。',
+            'tpl_reply_on_hint' => '开启后，访客提交成功会立刻收到自动确认邮件（发到表单里填的邮箱，Reply-To 指向询盘收件人）。',
             'tpl_lang_bar'     => '编辑语言',
             'tpl_lang_default' => '默认组',
             'tpl_lang_code'    => '语言',
-            'tpl_lang_add'     => '添加语言',
-            'tpl_lang_delete'  => '删除这个语言组',
+            'tpl_lang_add'     => '添加语言组',
+            'tpl_lang_delete'  => '删除该语言组',
             'tpl_lang_delete_confirm' => '删除该语言组及其模板？',
             'tpl_lang_added'   => '语言组已添加。',
             'tpl_lang_deleted' => '语言组已删除。',
-            'tpl_lang_exists'  => '该语言已存在。',
+            'tpl_lang_exists'  => '该语言组已存在。',
             'tpl_lang_hint'    => '按访客的浏览器语言（{{lang}}）匹配：先比完整标签（zh-CN），再比主语言（zh）；都匹配不上就用「默认组」——它不分语言，是最后的兜底。',
             'tpl_reply_labels_hint' => '这里的标签只作用于当前语言组的 {{rows}}；留空则用前端表单提交时的措辞。',
             'tpl_lang_default_hint' => '访客的浏览器语言没匹配到任何语言组时，发这一份',
@@ -371,9 +386,6 @@ final class Email_Log_Notifications {
             'tpl_labels'       => '字段标签',
             'tpl_labels_hint'  => '默认用前端表单提交的字段标签；这里填了会覆盖它，留空则回退到字段名本身。',
             'tpl_labels_sample' => '当前列出的是示例字段；收到第一封询盘后会自动换成真实字段。',
-            'mail_sent'        => '✓ 已发送',
-            'mail_failed'      => '✕ 发送失败',
-            'mail_none'        => '—',
             'view_action'      => '查看',
             'restore_action'   => '恢复',
             'delete_action'    => '删除',
@@ -383,25 +395,13 @@ final class Email_Log_Notifications {
             'not_found_msg'    => '询盘不存在。',
             'view_page_title'  => '查看询盘',
             'back'             => '← 返回所有询盘',
-            'details_heading'  => '提交详情',
             'content_heading'  => '询盘内容',
-            'meta_no'          => '编号',
-            'meta_form'        => '表单',
-            'meta_language'    => '语言',
-            'meta_source'      => '来源',
-            'meta_attachments' => '附件',
-            'meta_submitted'   => '提交时间',
-            'meta_mail'        => '发信',
             'form_page'        => '页面表单',
             'form_modal'       => '弹窗表单',
             'email_subject'    => '收到新询盘：%s',
-            'foot_lang'        => '浏览器语言',
-            'foot_tz'          => '时区',
-            'foot_ip'          => 'IP',
             'row_attachments'  => '附件',
             'read_only'        => '询盘为只读档案，请到后台「询盘」列表查看。',
             'email_subject_reply' => '已收到您的询盘',
-            'meta_autoreply'   => '自动确认',
             'fields'           => array(
                 'fullName'            => '姓名',
                 'email'               => '邮箱',
@@ -430,18 +430,29 @@ final class Email_Log_Notifications {
             'col_email'        => '郵箱',
             'col_source'       => '來源',
             'col_attachments'  => '附件',
-            'col_mail'         => '寄送',
+            'col_mail'         => '發信狀態',
+            'status_none'             => '未寄送',
+            'status_partial'          => '部分寄送',
+            'status_all'              => '已全部寄送',
+            'status_none_hint'        => '詢盤通知、自動確認均未寄送',
+            'status_notify_only'      => '僅寄送詢盤通知',
+            'status_reply_only'       => '僅寄送自動確認',
+            'status_all_hint'         => '詢盤通知、自動確認均已寄送',
+            'status_yes'              => '已寄送',
+            'status_no'               => '寄送失敗',
+            'label_notify'            => '詢盤通知',
+            'label_reply'             => '自動確認',
             'view_trash'       => '回收站',
-            'all_sources'      => '全部來源',
+            'all_sources'      => '所有來源',
             'tpl_menu'         => '郵件模板',
             'dash_title'       => '最近詢盤',
             'dash_today_at'    => '今天 %s',
             'dash_yesterday_at' => '昨天 %s',
             'dash_today'       => '今天 %d 則',
             'dash_total'       => '共 %d 則',
-            'dash_empty'       => '還沒有收到詢盤。',
-            'dash_all'         => '檢視全部詢盤',
-            'tpl_intro'        => '通知郵件就是一份可直接編輯的 HTML 原始碼，右側預覽依它即時渲染。',
+            'dash_empty'       => '尚無詢盤。',
+            'dash_all'         => '檢視所有詢盤',
+            'tpl_intro'        => '郵件模板就是可直接編輯的 HTML 原始碼，右側預覽依它即時渲染。',
             'tpl_subject'      => '郵件主旨',
             'tpl_subject_hint' => '可用變數：{{name}} {{email}}（與正文同一套花括號）；留空用預設文案。',
             'tpl_html'         => '郵件模板原始碼（HTML）',
@@ -449,16 +460,16 @@ final class Email_Log_Notifications {
             'tpl_tab_notify'   => '詢盤通知',
             'tpl_tab_reply'    => '自動確認',
             'tpl_reply_on'     => '啟用自動確認',
-            'tpl_reply_on_hint' => '開啟後，訪客提交成功會立刻收到這封確認郵件（寄到表單裡填的信箱，Reply-To 指向詢盤收件人）。',
+            'tpl_reply_on_hint' => '開啟後，訪客提交成功會立刻收到自動確認郵件（寄到表單裡填的信箱，Reply-To 指向詢盤收件人）。',
             'tpl_lang_bar'     => '編輯語言',
             'tpl_lang_default' => '預設組',
             'tpl_lang_code'    => '語言',
-            'tpl_lang_add'     => '新增語言',
-            'tpl_lang_delete'  => '刪除這個語言',
-            'tpl_lang_delete_confirm' => '刪除該語言及其模板？',
-            'tpl_lang_added'   => '語言已新增。',
-            'tpl_lang_deleted' => '語言已刪除。',
-            'tpl_lang_exists'  => '該語言已存在。',
+            'tpl_lang_add'     => '新增語言組',
+            'tpl_lang_delete'  => '刪除該語言組',
+            'tpl_lang_delete_confirm' => '刪除該語言組及其模板？',
+            'tpl_lang_added'   => '語言組已新增。',
+            'tpl_lang_deleted' => '語言組已刪除。',
+            'tpl_lang_exists'  => '該語言組已存在。',
             'tpl_lang_hint'    => '依訪客瀏覽器語言（{{lang}}）比對：先比完整標籤（zh-CN），再比主要語言（zh）；都比對不上就用「預設組」——它不分語言，是最後的後備。',
             'tpl_reply_labels_hint' => '這裡的標籤只作用於目前語言組的 {{rows}}；留空則用前端表單送出的措辭。',
             'tpl_lang_default_hint' => '訪客的瀏覽器語言沒有比對到任何語言組時，寄這一份',
@@ -482,9 +493,6 @@ final class Email_Log_Notifications {
             'tpl_labels'       => '欄位標籤',
             'tpl_labels_hint'  => '預設用前端表單送出的欄位標籤；這裡填了會覆蓋它，留空則回退到欄位名本身。',
             'tpl_labels_sample' => '目前列出的是範例欄位；收到第一封詢盤後會自動換成真實欄位。',
-            'mail_sent'        => '✓ 已寄送',
-            'mail_failed'      => '✕ 寄送失敗',
-            'mail_none'        => '—',
             'view_action'      => '檢視',
             'restore_action'   => '還原',
             'delete_action'    => '刪除',
@@ -494,25 +502,13 @@ final class Email_Log_Notifications {
             'not_found_msg'    => '詢盤不存在。',
             'view_page_title'  => '檢視詢盤',
             'back'             => '← 返回所有詢盤',
-            'details_heading'  => '提交資訊',
             'content_heading'  => '詢盤內容',
-            'meta_no'          => '編號',
-            'meta_form'        => '表單',
-            'meta_language'    => '語言',
-            'meta_source'      => '來源',
-            'meta_attachments' => '附件',
-            'meta_submitted'   => '提交時間',
-            'meta_mail'        => '寄送',
             'form_page'        => '頁面表單',
             'form_modal'       => '彈窗表單',
             'email_subject'    => '收到新詢盤：%s',
-            'foot_lang'        => '瀏覽器語言',
-            'foot_tz'          => '時區',
-            'foot_ip'          => 'IP',
             'row_attachments'  => '附件',
             'read_only'        => '詢盤為唯讀檔案，請到後台「詢盤」列表查看。',
             'email_subject_reply' => '已收到您的詢盤',
-            'meta_autoreply'   => '自動確認',
             'fields'           => array(
                 'fullName'            => '姓名',
                 'email'               => '郵箱',
@@ -730,25 +726,25 @@ final class Email_Log_Notifications {
 
     public static function handle(WP_REST_Request $request) {
         // ---------- 蜜罐：非空即机器人，装作成功，什么都不发 ----------
+        // 放在限流之前：蜜罐命中不该消耗真实访客的配额，也不入库、不发信。
         $honeypot = isset($_POST[self::HONEYPOT]) ? trim(wp_unslash($_POST[self::HONEYPOT])) : '';
         if ($honeypot !== '') {
             return new WP_REST_Response(array('sent' => true), 200);
         }
 
-        // ---------- 限流 ----------
-        // 经内网穿透（frp）进来时，nginx 看到的源 IP 一律是回环地址，按 IP 限流
-        // 会把所有外网访客算成一个人 —— 那种情况退化成全局上限。
-        $ip = self::client_ip();
-        $is_public = (bool) filter_var($ip, FILTER_VALIDATE_IP,
-            FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
-        $key   = 'inquiry_rl_' . ($is_public ? md5($ip) : 'global');
-        $limit = $is_public ? self::RATE_LIMIT : self::RATE_LIMIT_GLOBAL;
-        $count = (int) get_transient($key);
-        if ($count >= $limit) {
-            return new WP_Error('inquiry_rate_limited',
-                'Too many submissions. Please try again later.', array('status' => 429));
+        // ---------- 限流：1 分钟 3 次 / 1 小时 10 次 ----------
+        // 标识优先用链路里的公网 IP；frp 是 TCP 穿透，nginx 看到的源地址恒为回环，
+        // 这时改用服务端签发的 HttpOnly 访客 cookie，避免把全站访客算成一个人。
+        $retry_after = self::rate_consume(self::rate_identity());
+        if ($retry_after > 0) {
+            $response = new WP_REST_Response(array(
+                'code'        => 'inquiry_rate_limited',
+                'message'     => 'Too many submissions. Please try again later.',
+                'retry_after' => $retry_after,
+            ), 429);
+            $response->header('Retry-After', (string) $retry_after);
+            return $response;
         }
-        set_transient($key, $count + 1, HOUR_IN_SECONDS);
 
         // ---------- 字段收集 ----------
         $fields = array();
@@ -1010,6 +1006,90 @@ final class Email_Log_Notifications {
             wp_delete_file($f);
         }
         @rmdir($dir); // 还有保留文件时删不掉，留着给下次或人工处理
+    }
+
+    /**
+     * 限流用的请求标识（与邮件里的 {{ip}} 分开：那边如实记录服务端看到的地址）。
+     *
+     *   1. 先扫 X-Forwarded-For / X-Real-IP / REMOTE_ADDR，取第一个公网 IP；
+     *      将来 frp 换成 http 代理或启用 PROXY protocol 后会自动按真实 IP 分桶。
+     *   2. 本机反代 / TCP 穿透下全是回环或私网地址，退化成服务端签发的
+     *      HttpOnly cookie（前端脚本读不到也改不了），每个访客一个桶。
+     *
+     * 注意：cookie 是"区分访客"用的，不是身份凭证；丢弃 cookie 的客户端
+     * 会拿到新标识，所以要拦住无状态刷接口还得靠链路层拿到真实 IP。
+     */
+    private static function rate_identity(): string {
+        foreach (array('HTTP_X_FORWARDED_FOR', 'HTTP_X_REAL_IP', 'REMOTE_ADDR') as $key) {
+            if (empty($_SERVER[$key])) {
+                continue;
+            }
+            foreach (explode(',', (string) $_SERVER[$key]) as $candidate) {
+                $candidate = trim($candidate);
+                if (filter_var($candidate, FILTER_VALIDATE_IP,
+                    FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                    return 'ip_' . $candidate;
+                }
+            }
+        }
+
+        $vid = isset($_COOKIE[self::RATE_VISITOR_COOKIE]) ? (string) $_COOKIE[self::RATE_VISITOR_COOKIE] : '';
+        if (!preg_match('/^[a-f0-9]{32}$/', $vid)) {
+            $vid = bin2hex(random_bytes(16));
+            if (!headers_sent()) {
+                setcookie(self::RATE_VISITOR_COOKIE, $vid, array(
+                    'expires'  => time() + DAY_IN_SECONDS,
+                    'path'     => '/',
+                    'httponly' => true,
+                    'samesite' => 'Lax',
+                ));
+            }
+            $_COOKIE[self::RATE_VISITOR_COOKIE] = $vid;
+        }
+        return 'vid_' . $vid;
+    }
+
+    /**
+     * 固定窗口双限流：1 分钟 3 次 + 1 小时 10 次。
+     *
+     * transient 里存 ['start' => 窗口起点, 'count' => 次数]，是否过期按 start 判断，
+     * 不依赖每次 set_transient 被续写的 TTL（否则窗口会无限滑动、永不恢复）。
+     * 超限的请求本身不计数，否则被拒的请求会把窗口一直顶住。
+     * 返回 0 = 放行（已计数）；>0 = 还要等待的秒数。
+     */
+    private static function rate_consume(string $identity): int {
+        $now     = time();
+        $hash    = md5($identity);
+        $windows = array(
+            'min'  => array('ttl' => self::RATE_MINUTE_TTL, 'limit' => self::RATE_MINUTE_LIMIT),
+            'hour' => array('ttl' => self::RATE_HOUR_TTL,   'limit' => self::RATE_HOUR_LIMIT),
+        );
+        $states = array();
+        $retry  = 0;
+
+        foreach ($windows as $name => $cfg) {
+            $key   = 'inquiry_rl_' . $name . '_' . $hash;
+            $state = get_transient($key);
+            if (!is_array($state) || !isset($state['start'], $state['count'])
+                || $now - (int) $state['start'] >= $cfg['ttl']) {
+                $state = array('start' => $now, 'count' => 0);
+            }
+            $states[$key] = array('state' => $state, 'ttl' => $cfg['ttl']);
+            if ((int) $state['count'] >= $cfg['limit']) {
+                $retry = max($retry, $cfg['ttl'] - ($now - (int) $state['start']));
+            }
+        }
+
+        if ($retry > 0) {
+            return max(1, $retry);
+        }
+
+        foreach ($states as $key => $item) {
+            $state = $item['state'];
+            $state['count'] = (int) $state['count'] + 1;
+            set_transient($key, $state, $item['ttl']);
+        }
+        return 0;
     }
 
     /**
@@ -2003,14 +2083,61 @@ HTML;
                 echo self::attachments_html($post_id, ', ');
                 break;
             case 'inquiry_mail':
-                $sent = get_post_meta($post_id, 'inquiry_mail_sent', true);
-                echo $sent === 'yes'
-                    ? '<span style="color:#00a32a;">' . esc_html(self::t('mail_sent')) . '</span>'
-                    : ($sent === 'no'
-                        ? '<span style="color:#d63638;">' . esc_html(self::t('mail_failed')) . '</span>'
-                        : esc_html(self::t('mail_none')));
+                echo self::mail_status_html($post_id); // phpcs:ignore WordPress.Security.EscapeOutput
                 break;
         }
+    }
+
+    /**
+     * 发信状态：三档圆形 = 两封邮件里「成功发出」的封数。
+     *   0 封 → 空心圆（未发送）／1 封 → 半填圆（部分发送）／2 封 → 全填圆（已全部发送）
+     * 具体哪封发出、哪封失败以及 SMTP 报错都放进 title，悬停可查。
+     */
+    private static function mail_status_html(int $post_id): string {
+        $notify  = (string) get_post_meta($post_id, 'inquiry_mail_sent', true);
+        $reply   = (string) get_post_meta($post_id, 'inquiry_autoreply_sent', true);
+        $n_error = (string) get_post_meta($post_id, 'inquiry_mail_error', true);
+        $r_error = (string) get_post_meta($post_id, 'inquiry_autoreply_error', true);
+
+        $sent = (int) ($notify === 'yes') + (int) ($reply === 'yes');
+
+        $word = static function (string $state): string {
+            if ($state === 'yes') {
+                return self::t('status_yes');
+            }
+            return $state === 'no' ? self::t('status_no') : self::t('status_none');
+        };
+
+        if ($sent === 2) {
+            $summary = self::t('status_all_hint');
+            $short   = self::t('status_all');
+        } elseif ($sent === 1) {
+            $summary = $notify === 'yes' ? self::t('status_notify_only') : self::t('status_reply_only');
+            $short   = self::t('status_partial');
+        } else {
+            $summary = self::t('status_none_hint');
+            $short   = self::t('status_none');
+        }
+
+        $lines = array(
+            self::t('label_notify') . '：' . $word($notify) . ($n_error !== '' ? '（' . $n_error . '）' : ''),
+            self::t('label_reply') . '：' . $word($reply) . ($r_error !== '' ? '（' . $r_error . '）' : ''),
+        );
+        $title = $summary . "\n" . implode("\n", $lines);
+
+        // 圆：0=只描边，1=左半填充，2=整圆填充；描边始终保留，三档一眼可分
+        $svg = '<svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false"'
+             . ' style="vertical-align:middle;margin-right:5px;">';
+        if ($sent === 2) {
+            $svg .= '<circle cx="7" cy="7" r="6" fill="#00a32a"/>';
+        } elseif ($sent === 1) {
+            $svg .= '<path d="M7 1 A6 6 0 0 0 7 13 Z" fill="#00a32a"/>';
+        }
+        $svg .= '<circle cx="7" cy="7" r="6" fill="none" stroke="#8c8f94" stroke-width="1.5"/>';
+        $svg .= '</svg>';
+
+        return '<span title="' . esc_attr($title) . '" aria-label="' . esc_attr($short) . '"'
+             . ' style="white-space:nowrap;">' . $svg . esc_html($short) . '</span>';
     }
 
     /** 单条记录的来源展示名：英文页面标题（表单类型），表单类型标注页面/弹窗 */
@@ -2298,6 +2425,7 @@ HTML;
         }
     }
 
+    /** 只读详情页：只留邮件正文；元信息表与正文重复，已去掉 */
     public static function render_view_page(): void {
         if (!current_user_can('read')) {
             wp_die('Insufficient permissions.', '', array('response' => 403));
@@ -2308,52 +2436,6 @@ HTML;
         if (!$post || $post->post_type !== self::POST_TYPE) {
             wp_die(esc_html(self::t('not_found_msg')), '', array('response' => 404));
         }
-
-        $email     = (string) get_post_meta($post_id, 'inquiry_email', true);
-        $variant   = (string) get_post_meta($post_id, 'inquiry_variant', true);
-        $locale    = (string) get_post_meta($post_id, 'inquiry_locale', true);
-        $lang      = (string) get_post_meta($post_id, 'inquiry_lang', true);
-        $timezone  = (string) get_post_meta($post_id, 'inquiry_timezone', true);
-        $page_url  = (string) get_post_meta($post_id, 'inquiry_page_url', true);
-        $ip        = (string) get_post_meta($post_id, 'inquiry_ip', true);
-        $sent      = (string) get_post_meta($post_id, 'inquiry_mail_sent', true);
-        $replied   = (string) get_post_meta($post_id, 'inquiry_autoreply_sent', true);
-        $mail_err  = (string) get_post_meta($post_id, 'inquiry_mail_error', true);
-        $reply_err = (string) get_post_meta($post_id, 'inquiry_autoreply_error', true);
-        $submitted = get_the_date('Y-m-d H:i:s', $post);
-
-        $variant_label = $variant === 'modal' ? self::t('form_modal')
-            : ($variant === 'page' ? self::t('form_page') : ($variant !== '' ? $variant : '—'));
-
-        // 失败时把 SMTP 给的原因一并显示，否则「发信失败」四个字没法排查
-        $mail_state = static function (string $state, string $error): string {
-            if ($state === 'yes') {
-                return '<span style="color:#00a32a;">' . esc_html(self::t('mail_sent')) . '</span>';
-            }
-            if ($state === 'no') {
-                $html = '<span style="color:#d63638;">' . esc_html(self::t('mail_failed')) . '</span>';
-                if ($error !== '') {
-                    $html .= '<br><span class="description" style="color:#646970;">' . esc_html($error) . '</span>';
-                }
-                return $html;
-            }
-            return '—';
-        };
-
-        $meta_rows = array(
-            self::t('meta_no')          => esc_html((string) get_post_meta($post_id, 'inquiry_no', true) ?: '—'),
-            self::t('col_email')        => $email !== '' ? '<a href="mailto:' . esc_attr($email) . '">' . esc_html($email) . '</a>' : '—',
-            self::t('meta_form')        => esc_html($variant_label),
-            self::t('meta_language')    => esc_html($locale !== '' ? $locale : '—'),
-            self::t('foot_lang')        => esc_html($lang !== '' ? $lang : '—'),
-            self::t('foot_tz')          => esc_html($timezone !== '' ? $timezone : '—'),
-            self::t('meta_source')      => $page_url !== '' ? '<a href="' . esc_attr($page_url) . '" target="_blank" rel="noopener">' . esc_html(self::record_source_label($post_id)) . '</a>' : '—',
-            self::t('meta_attachments') => self::attachments_html($post_id),
-            self::t('meta_mail')        => $mail_state($sent, $mail_err),
-            self::t('meta_autoreply')   => $mail_state($replied, $reply_err),
-            self::t('meta_submitted')   => esc_html($submitted),
-            self::t('foot_ip')          => esc_html($ip !== '' ? $ip : '—'),
-        );
 
         $delete_url = current_user_can('delete_posts')
             ? wp_nonce_url(admin_url('admin-post.php?action=inquiry_delete&id=' . $post_id), 'inquiry_del_' . $post_id)
@@ -2368,13 +2450,6 @@ HTML;
                        onclick="return confirm('<?php echo esc_js(self::t('confirm_delete')); ?>');"><?php echo esc_html(self::t('delete_action')); ?></a>
                 <?php endif; ?>
             </h1>
-
-            <h2 class="title"><?php echo esc_html(self::t('details_heading')); ?></h2>
-            <table class="widefat striped" style="max-width:760px;">
-                <?php foreach ($meta_rows as $label => $value) : ?>
-                    <tr><th style="width:160px;"><?php echo esc_html($label); ?></th><td><?php echo $value; // phpcs:ignore WordPress.Security.EscapeOutput ?></td></tr>
-                <?php endforeach; ?>
-            </table>
 
             <h2 class="title"><?php echo esc_html(self::t('content_heading')); ?></h2>
             <div style="max-width:760px;background:#fff;border:1px solid #dcdcde;padding:16px;">
