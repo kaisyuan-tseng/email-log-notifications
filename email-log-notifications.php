@@ -687,9 +687,11 @@ final class Email_Log_Notifications {
         $sample = false;
         if (!$seen) {
             $sample = true;
-            foreach (self::SAMPLE_FIELD_KEYS as $field_key) {
-                $seen[$field_key] = true;
-            }
+        }
+        // 表单契约字段恒在：真实询盘只提交了 4 个字段时，标签编辑器也要能编辑全量
+        // （历史数据是「补充」，不是唯一来源——否则新站/少字段询盘会把列表缩水）
+        foreach (self::SAMPLE_FIELD_KEYS as $field_key) {
+            $seen[$field_key] = true;
         }
 
         $latest = self::latest_field_labels();
@@ -730,6 +732,8 @@ final class Email_Log_Notifications {
         add_action('admin_init', array(__CLASS__, 'backfill_numbers'));
 
         add_filter('manage_' . self::POST_TYPE . '_posts_columns', array(__CLASS__, 'admin_columns'));
+        // 编号列和日期一样可点表头排序（按 inquiry_no 数字序）
+        add_filter('manage_edit-' . self::POST_TYPE . '_sortable_columns', array(__CLASS__, 'sortable_columns'));
         // 主列 = 编号：行操作（查看/删除）挂在编号下面；客户、来源两列都是纯文本
         add_filter('list_table_primary_column', array(__CLASS__, 'primary_column'), 10, 2);
         add_action('manage_' . self::POST_TYPE . '_posts_custom_column', array(__CLASS__, 'admin_column_content'), 10, 2);
@@ -1355,11 +1359,20 @@ final class Email_Log_Notifications {
     private static function tpl(string $kind = 'notify'): array {
         static $cache = array();
         if (!isset($cache[$kind])) {
-            $saved = get_option(self::option_name($kind), array());
-            $tpl   = wp_parse_args(is_array($saved) ? $saved : array(), self::template_defaults($kind));
+            $saved    = get_option(self::option_name($kind));
+            $is_saved = is_array($saved) && $saved !== array(); // 保存过 = 之后空就是空
+            $tpl      = wp_parse_args(is_array($saved) ? $saved : array(), self::template_defaults($kind));
             if ($kind === 'autoreply') {
                 // 语言组统一规范化：0 号恒为默认组，同一语言只留一份
                 $tpl['groups'] = self::reply_groups($tpl);
+                if (!$is_saved) {
+                    // 从未保存过：各组空源码用内置默认（首次进后台就能看到完整模板）
+                    foreach ($tpl['groups'] as $i => $g) {
+                        $tpl['groups'][$i]['html'] = self::default_template_html('autoreply');
+                    }
+                }
+            } elseif (!$is_saved) {
+                $tpl['html'] = self::default_template_html('notify');
             }
             $cache[$kind] = $tpl;
         }
@@ -1636,9 +1649,8 @@ HTML;
         $timezone   = self::field_timezone($fields);
         $local_time = self::local_time_label($timezone, 'Y-m-d H:i:s T', $timestamp);
 
-        $source = trim((string) $tpl['html']) !== ''
-            ? (string) $tpl['html']
-            : self::default_template_html($kind);
+        // 源码就是源码：保存过就原样用（清空 = 空正文），没保存过才由 tpl() 注入默认
+        $source = (string) ($tpl['html'] ?? '');
 
         return strtr($source, array(
             '{{site_name}}'    => '', // 已废弃：站名没有信息量，模板里不再使用
@@ -2051,7 +2063,7 @@ HTML;
         return array_values(array_filter(array_map('trim', (array) $rows), static fn($v) => $v !== ''));
     }
 
-    /** 按来源过滤列表（只在询盘列表的主查询上生效） */
+    /** 按来源过滤 + 编号列排序（只在询盘列表的主查询上生效） */
     public static function apply_source_filter(WP_Query $query): void {
         if (!is_admin() || !$query->is_main_query()) {
             return;
@@ -2059,6 +2071,17 @@ HTML;
         if ($query->get('post_type') !== self::POST_TYPE) {
             return;
         }
+
+        // 编号排序：inquiry_no 是 14 位数字串，按数值序排（升/降跟随表头点击）
+        // phpcs:disable WordPress.Security.NonceVerification
+        if (isset($_GET['orderby']) && $_GET['orderby'] === 'inquiry_no') {
+            $order = isset($_GET['order']) && strtoupper((string) $_GET['order']) === 'ASC' ? 'ASC' : 'DESC';
+            $query->set('meta_key', 'inquiry_no');
+            $query->set('orderby', 'meta_value_num');
+            $query->set('order', $order);
+        }
+        // phpcs:enable
+
         // phpcs:ignore WordPress.Security.NonceVerification
         $value = isset($_GET['inquiry_source']) ? trim(wp_unslash((string) $_GET['inquiry_source'])) : '';
         if ($value === '') {
@@ -2082,12 +2105,13 @@ HTML;
             return;
         }
         echo '<style>'
-            . '.fixed .column-inquiry_no{width:110px;}'
-            . '.fixed .column-inquiry_source{width:22%;}'
-            . '.fixed .column-inquiry_attachments{width:16%;}'
-            . '.fixed .column-inquiry_mail{width:120px;}'
-            . '.eln-mail-status{display:inline-block;}'
-            . '.eln-mail-item{display:block;font-size:12px;line-height:1.9;color:#50575e;white-space:nowrap;}'
+            . '.fixed .column-inquiry_no{width:130px;}'
+            . '.fixed .column-inquiry_email{width:180px;overflow-wrap:anywhere;}'
+            . '.fixed .column-inquiry_source{width:20%;}'
+            . '.fixed .column-inquiry_attachments{width:13%;}'
+            . '.fixed .column-inquiry_mail{width:215px;}'
+            . '.eln-mail-status{display:inline-flex;flex-wrap:wrap;align-items:center;gap:2px 14px;}'
+            . '.eln-mail-item{display:inline-block;font-size:12px;line-height:1.9;color:#50575e;white-space:nowrap;}'
             . '.eln-mail-dot{display:inline-block;width:9px;height:9px;margin-right:6px;border-radius:50%;vertical-align:-1px;}'
             . '.eln-mail-dot.is-ok{background:#00a32a;}'
             . '.eln-mail-dot.is-fail{background:#d63638;}'
@@ -2100,7 +2124,13 @@ HTML;
         return $screen_id === 'edit-' . self::POST_TYPE ? 'inquiry_no' : $column;
     }
 
-    /** 列表列：姓名（点击进详情）/ 邮箱 / 来源 / 附件 / 发信 / 日期 */
+    /** 列表列：编号（点击进详情）/ 姓名 / 邮箱 / 来源 / 附件 / 发信 / 日期 */
+    /** 可排序的列表列：编号按 inquiry_no 的数值序，和日期列一样的点击体验 */
+    public static function sortable_columns(array $columns): array {
+        $columns['inquiry_no'] = 'inquiry_no';
+        return $columns;
+    }
+
     public static function admin_columns(array $columns): array {
         $new = array();
         foreach ($columns as $key => $label) {
@@ -2402,7 +2432,7 @@ HTML;
         ?>
         <style>
             /* 结构照搬 WP「外观 → 主题详情」，遮罩同 .theme-backdrop：浅灰 90%、不盖左侧菜单和管理栏 */
-            .eln-modal{position:fixed;top:32px;left:160px;right:0;bottom:0;z-index:9990;display:none;align-items:center;justify-content:center;padding:40px;background:rgba(240,240,241,.9);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;font-size:13px;line-height:1.5;color:#1d2327;}
+            .eln-modal{position:fixed;top:32px;left:160px;right:0;bottom:0;z-index:9980;display:none;align-items:center;justify-content:center;padding:40px;background:rgba(240,240,241,.9);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;font-size:13px;line-height:1.5;color:#1d2327;}
             .eln-modal.is-open{display:flex;}
             .eln-modal__panel{position:relative;width:min(1080px,100%);height:min(720px,100%);display:flex;flex-direction:column;background:#fff;box-shadow:0 1px 20px 5px rgba(0,0,0,.1);}
             .eln-modal__top{position:relative;flex:none;height:48px;border-bottom:1px solid #dcdcde;}
@@ -2431,18 +2461,20 @@ HTML;
             .eln-modal__chip.is-all{background:#edfaef;color:#00a32a;}
             .eln-modal__chip.is-partial{background:#fcf9e8;color:#996800;}
             .eln-modal__chip.is-none{background:#f0f0f1;color:#787c82;}
-            .eln-modal__title{margin:0 0 2px;font-size:21px;font-weight:400;line-height:1.4;}
-            .eln-modal__no{margin:0 0 10px;color:#646970;font-size:12px;}
+            .eln-modal__title{margin:0 0 4px;font-size:21px;font-weight:400;line-height:1.4;}
+            .eln-modal__no{margin:0 0 14px;color:#646970;font-size:12px;}
             .eln-modal__fields{margin:0;}
-            .eln-modal__fields dt{margin:14px 0 2px;color:#646970;font-size:12px;}
+            .eln-modal__fields dt{margin:16px 0 3px;color:#646970;font-size:12px;}
+            .eln-modal__fields dt:first-of-type{margin-top:0;}
             .eln-modal__fields dd{margin:0;font-size:13px;word-break:break-word;}
             .eln-modal__fields dd .eln-mail-item{display:block;}
             .eln-modal__foot{flex:none;height:53px;display:flex;justify-content:center;align-items:center;gap:8px;padding:10px 25px 5px;background:#f6f7f7;border-top:1px solid #f0f0f1;}
             /* 删除：与核心 .delete-theme 一致——默认红字透底，hover 红底白字红边 */
             .eln-modal__delete{color:#b32d2e !important;border:1px solid transparent !important;background:transparent !important;}
             .eln-modal__delete:hover{background:#b32d2e !important;border-color:#b32d2e !important;color:#fff !important;}
-            /* 侧栏收起/窄屏时遮罩左缘贴住菜单 */
-            .folded .eln-modal,.auto-fold .eln-modal{left:36px;}
+            /* 只有真正收起（.folded）才贴 36px；auto-fold 只是「窗口变窄自动折叠」的标记，
+               菜单此时可能还是展开的 160px，跟着缩会盖住菜单 */
+            .folded .eln-modal{left:36px;}
             /* 窄屏：遮罩铺满、面板全屏 */
             @media (max-width:782px){
                 .eln-modal{left:0;top:0;padding:0;}
@@ -3086,8 +3118,9 @@ HTML;
 
         // 通知只有一份模板；自动确认取「当前语言组」这一份
         $tpl  = $is_auto ? $slot_group : self::tpl('notify');
-        // 代码框显示的就是真正生效的模板源码：没自定义过就是默认源码
-        $code = trim((string) $tpl['html']) !== '' ? (string) $tpl['html'] : self::default_template_html($kind);
+        // 代码框显示的永远是这个模板真正生效的源码：没保存过 tpl() 已注入默认，
+        // 保存过就原样显示（清空过就是空的，不再偷偷塞回默认模板）
+        $code = (string) $tpl['html'];
 
         $base_args = array('kind' => $kind);
         if ($is_auto) {
@@ -3173,11 +3206,12 @@ HTML;
 
             /* 卡片外壳：头（标题 + 操作）/ 语言条 / 表单体 */
             .si-tpl-card { background: #fff; border: 1px solid #dcdcde; }
-            .si-tpl-card__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 18px; border-bottom: 1px solid #f0f0f1; }
+            .si-tpl-card__head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px 16px; padding: 14px 20px; border-bottom: 1px solid #f0f0f1; }
             .si-tpl-card__head h2 { margin: 0; font-size: 15px; line-height: 1.5; }
-            .si-tpl-card__head .description { margin: 0; }
-            .si-tpl-card__actions { display: flex; gap: 8px; }
-            .si-tpl-card__body { padding: 16px 18px 20px; }
+            .si-tpl-card__head .description { margin: 3px 0 0; }
+            .si-tpl-card__head > div:first-child { min-width: 0; }
+            .si-tpl-card__actions { display: flex; gap: 8px; flex: none; }
+            .si-tpl-card__body { padding: 20px 20px 24px; }
 
             /* 语言组 */
             .si-lang-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 18px; background: #f6f7f7; border-bottom: 1px solid #f0f0f1; }
@@ -3194,11 +3228,12 @@ HTML;
             .si-lang-hint { flex: 0 0 100%; margin: 0; font-size: 12px; color: #646970; }
 
             /* 表单 */
-            .si-tpl-row { display: flex; gap: 18px; flex-wrap: wrap; margin: 0 0 18px; }
-            .si-tpl-field { display: flex; flex-direction: column; gap: 6px; }
+            .si-tpl-row { display: flex; gap: 20px; flex-wrap: wrap; margin: 0 0 22px; }
+            .si-tpl-field { display: flex; flex-direction: column; gap: 8px; }
             .si-tpl-field--grow { flex: 1 1 300px; }
             .si-tpl-field label { font-weight: 600; }
             .si-tpl-field .description { margin: 0; }
+            .si-tpl-field input[type=text], .si-tpl-field textarea { margin: 0; }
             .si-tpl-check { display: flex; align-items: center; gap: 8px; font-weight: 600; margin: 0 0 4px; }
             .si-tpl-field--check { margin: 0 0 18px; }
             .si-lang-code { flex: 0 0 220px; }
@@ -3235,7 +3270,7 @@ HTML;
             .si-tpl-legend code { font-size: 11px; }
             .si-req { color: #d63638; margin-left: 1px; }
             .CodeMirror { height: 560px; border: 1px solid #dcdcde; }
-            .si-tpl-save { margin: 14px 0 0; }
+            .si-tpl-save { margin: 18px 0 0; }
 
             /* 预览 */
             .si-tpl-preview { position: sticky; top: 32px; }
@@ -3268,10 +3303,12 @@ HTML;
                 <?php // 「邮件回复」标签：mailto 的 to/cc/bcc/主题/正文骨架；保存空白就是空白，「恢复默认」才回内置模板
                 $reply_reset = wp_nonce_url(admin_url('admin-post.php?action=inquiry_reply_reset'), 'inquiry_reply_reset'); ?>
                 <div class="si-tpl-card">
-                    <div class="si-tpl-card__head" data-elnver="r27">
-                        <h2><?php echo esc_html(self::t('reply_menu')); ?></h2>
+                    <div class="si-tpl-card__head">
+                        <div>
+                            <h2><?php echo esc_html(self::t('reply_menu')); ?></h2>
+                            <p class="description"><?php echo esc_html(self::t('reply_card_hint')); ?></p>
+                        </div>
                         <div class="si-tpl-card__actions">
-                            <span class="description"><?php echo esc_html(self::t('reply_card_hint')); ?></span>
                             <a class="button" href="<?php echo esc_url($reply_reset); ?>"
                                title="<?php echo esc_attr(self::t('reply_reset')); ?>"
                                onclick="return confirm('<?php echo esc_js(self::t('reply_reset')); ?>?');"><?php echo esc_html(self::t('reply_reset')); ?></a>
@@ -3279,7 +3316,7 @@ HTML;
                     </div>
                     <form method="post" action="options.php" class="si-tpl-card__body">
                         <?php settings_fields('eln_reply_group'); ?>
-                        <?php $reply_tpl = self::reply_tpl(); $rm = new ReflectionMethod(self::class, 'reply_tpl'); ?><!-- DBG2 file=<?php echo esc_html($rm->getFileName()); ?>:<?php echo (int) $rm->getStartLine(); ?> tpl=<?php echo esc_html(wp_json_encode($reply_tpl)); ?> opt=<?php echo esc_html(wp_json_encode(get_option(self::OPT_REPLY, '(absent)'))); ?> -->
+                        <?php $reply_tpl = self::reply_tpl(); ?>
                         <div class="si-tpl-row">
                             <div class="si-tpl-field si-tpl-field--grow">
                                 <label for="eln-reply-to"><?php echo esc_html(self::t('reply_to')); ?></label>
@@ -3306,9 +3343,9 @@ HTML;
                                        class="large-text" value="<?php echo esc_attr($reply_tpl['subject']); ?>" />
                             </div>
                         </div>
-                        <div class="si-tpl-field" style="display:flex;">
+                        <div class="si-tpl-field">
                             <label for="eln-reply-body"><?php echo esc_html(self::t('reply_body')); ?></label>
-                            <textarea class="large-text code" rows="10" id="eln-reply-body" style="margin-top:6px;"
+                            <textarea class="large-text code" rows="10" id="eln-reply-body"
                                       name="<?php echo esc_attr(self::OPT_REPLY); ?>[body]"><?php echo esc_textarea($reply_tpl['body']); ?></textarea>
                         </div>
                         <p class="description"><?php echo esc_html(self::t('reply_hint')); ?></p>
@@ -3831,7 +3868,8 @@ JS;
             $groups = self::reply_groups($cfg);
             $slot   = self::current_slot($groups);
             $groups[$slot]['subject'] = '';
-            $groups[$slot]['html']    = '';
+            // 恢复默认 = 写回默认源码（不是清空：清空现在代表「就是要空正文」）
+            $groups[$slot]['html']    = self::default_template_html('autoreply');
             $groups[$slot]['labels']  = array();
             update_option(self::OPT_AUTOREPLY, array(
                 'enabled' => empty($cfg['enabled']) ? '0' : '1',
