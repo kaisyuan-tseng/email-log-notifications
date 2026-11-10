@@ -2139,9 +2139,9 @@ HTML;
             . '.fixed .column-inquiry_email{width:180px;overflow-wrap:anywhere;}'
             . '.fixed .column-inquiry_source{width:20%;}'
             . '.fixed .column-inquiry_attachments{width:13%;}'
-            . '.fixed .column-inquiry_mail{width:215px;}'
-            . '.eln-mail-status{display:inline-flex;flex-wrap:wrap;align-items:center;gap:2px 14px;}'
-            . '.eln-mail-item{display:inline-block;font-size:12px;line-height:1.9;color:#50575e;white-space:nowrap;}'
+            . '.fixed .column-inquiry_mail{width:170px;}'
+            . '.eln-mail-status{display:inline-block;}'
+            . '.eln-mail-item{display:block;font-size:12px;line-height:1.9;color:#50575e;white-space:nowrap;}'
             . '.eln-mail-dot{display:inline-block;width:9px;height:9px;margin-right:6px;border-radius:50%;vertical-align:-1px;}'
             . '.eln-mail-dot.is-ok{background:#00a32a;}'
             . '.eln-mail-dot.is-fail{background:#d63638;}'
@@ -2759,7 +2759,8 @@ HTML;
         $all_url = admin_url('edit.php?post_type=' . self::POST_TYPE);
         ?>
         <style>
-            /* 参照核心「活动 → 最近发布」：左边固定日期列 + 斑马纹 + 列表出血到挂件边缘；末列是发信状态双圆点 */
+            /* 参照核心「活动 → 最近发布」：左边固定日期列 + 斑马纹 + 列表出血到挂件边缘；
+               末列是发信状态：询盘通知 / 自动确认各一行，圆点 + 文字，口径与列表页一致 */
             .si-dash { margin: 0 -12px; }
             .si-dash__meta { margin: 0 0 8px; padding: 0 12px; color: #646970; font-size: 12px; }
             .si-dash__list { margin: 0; padding: 0; list-style: none; }
@@ -2769,8 +2770,9 @@ HTML;
             .si-dash__main { min-width: 0; }
             .si-dash__name { text-decoration: none; }
             .si-dash__sub { display: block; overflow: hidden; color: #646970; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-            .si-dash__mail { display: inline-flex; gap: 4px; align-self: center; }
-            .si-dash__dot { width: 8px; height: 8px; border-radius: 50%; }
+            .si-dash__mail { display: flex; flex-direction: column; gap: 1px; align-self: center; }
+            .si-dash__status { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 1.6; color: #50575e; white-space: nowrap; }
+            .si-dash__dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
             .si-dash__dot.is-ok { background: #00a32a; }
             .si-dash__dot.is-fail { background: #d63638; }
             .si-dash__dot.is-none { box-shadow: inset 0 0 0 1.5px #c3c4c7; }
@@ -2820,7 +2822,8 @@ HTML;
                                 <?php endif; ?>
                             </span>
                             <span class="si-dash__mail" title="<?php echo esc_attr($mail_title); ?>">
-                                <i class="si-dash__dot <?php echo esc_attr($dot_cls($n_state)); ?>"></i><i class="si-dash__dot <?php echo esc_attr($dot_cls($r_state)); ?>"></i>
+                                <span class="si-dash__status"><i class="si-dash__dot <?php echo esc_attr($dot_cls($n_state)); ?>"></i><?php echo esc_html(self::t('label_notify')); ?></span>
+                                <span class="si-dash__status"><i class="si-dash__dot <?php echo esc_attr($dot_cls($r_state)); ?>"></i><?php echo esc_html(self::t('label_reply')); ?></span>
                             </span>
                         </li>
                     <?php endforeach; ?>
