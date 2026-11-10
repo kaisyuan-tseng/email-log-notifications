@@ -631,6 +631,77 @@ final class Email_Log_Notifications {
     }
 
     /**
+     * 前端的「完整字段清单」：站点构建产物 /inquiry-fields.json（字段名 => 当前语言的显示标签）。
+     *
+     * 插件不内置任何字段表——清单由前端声明（公共字段来自 i18n 表单文案，
+     * 产品字段来自各产品的 formRows）。站点 origin 取最近一封询盘记录的 pageUrl，
+     * 语言跟随该询盘的页面语言；结果 transient 缓存 1 小时，取不到就退回空数组
+     * （编辑器只剩历史询盘带来过的字段，不会凭空出现任何字段）。
+     */
+    private static function frontend_field_manifest(): array {
+        $cached = get_transient('eln_field_manifest');
+        if (is_array($cached)) {
+            return $cached;
+        }
+
+        global $wpdb;
+        $recent = $wpdb->get_row(
+            "SELECT pm.post_id FROM {$wpdb->postmeta} pm
+             WHERE pm.meta_key = 'inquiry_page_url'
+             ORDER BY pm.meta_id DESC LIMIT 1"
+        );
+        $empty = array();
+        if (!$recent) {
+            set_transient('eln_field_manifest', $empty, MINUTE_IN_SECONDS);
+            return $empty;
+        }
+
+        $page_url = (string) get_post_meta((int) $recent->post_id, 'inquiry_page_url', true);
+        $parts    = wp_parse_url($page_url);
+        if (empty($parts['scheme']) || empty($parts['host'])) {
+            set_transient('eln_field_manifest', $empty, MINUTE_IN_SECONDS);
+            return $empty;
+        }
+        $origin = $parts['scheme'] . '://' . $parts['host'] . (isset($parts['port']) ? ':' . (int) $parts['port'] : '');
+
+        $response = wp_remote_get($origin . '/inquiry-fields.json', array('timeout' => 2));
+        if (is_wp_error($response) || (int) wp_remote_retrieve_response_code($response) !== 200) {
+            set_transient('eln_field_manifest', $empty, MINUTE_IN_SECONDS);
+            return $empty;
+        }
+        $json    = json_decode((string) wp_remote_retrieve_body($response), true);
+        $locales = (is_array($json) && isset($json['locales']) && is_array($json['locales'])) ? $json['locales'] : array();
+        if (!$locales) {
+            set_transient('eln_field_manifest', $empty, MINUTE_IN_SECONDS);
+            return $empty;
+        }
+
+        // 语言跟随最近一封询盘的页面语言（zh-Hans → zh-hans），对不上就找同语族，再不行用第一份
+        $locale_meta = strtolower(str_replace('_', '-', (string) get_post_meta((int) $recent->post_id, 'inquiry_locale', true)));
+        $pick = null;
+        if ($locale_meta !== '' && isset($locales[$locale_meta])) {
+            $pick = $locales[$locale_meta];
+        } elseif (str_starts_with($locale_meta, 'zh-hant') && isset($locales['zh-hant'])) {
+            $pick = $locales['zh-hant'];
+        } elseif (str_starts_with($locale_meta, 'zh') && isset($locales['zh-hans'])) {
+            $pick = $locales['zh-hans'];
+        } elseif (isset($locales['en'])) {
+            $pick = $locales['en'];
+        } else {
+            $pick = reset($locales);
+        }
+
+        $clean = array();
+        foreach ((array) $pick as $key => $label) {
+            if (is_string($key) && $key !== '' && is_string($label) && trim($label) !== '') {
+                $clean[$key] = trim($label);
+            }
+        }
+        set_transient('eln_field_manifest', $clean, HOUR_IN_SECONDS);
+        return $clean;
+    }
+
+    /**
      * 可改的字段集合：字段名 => 默认标签（**顺序 = 后台排出来的行序**）。
      *
      * 字段清单**只认前端提交的数据**：历史询盘带来的 fieldLabels（含没填值的字段）、
@@ -672,13 +743,35 @@ final class Email_Log_Notifications {
             $seen[$field_key] = true;
         }
 
-        $sample = !$seen; // 空集合 = 还没有任何历史字段，界面给空态提示
+        // 前端声明的完整字段清单（/inquiry-fields.json）：字段集与默认标签的第一来源。
+        // 历史询盘只带来"实际提交过"的那几行，清单负责补齐表单可能出现的全部字段。
+        $manifest = self::frontend_field_manifest();
+        foreach (array_keys($manifest) as $field_key) {
+            $seen[$field_key] = true;
+        }
+
+        $sample = !$seen; // 什么都没有 = 完全没有字段来源，界面给空态提示
 
         $latest = self::latest_field_labels();
         $defaults = array();
+        $resolve = static function (string $field_key) use ($latest, $manifest): string {
+            $label = trim((string) ($latest[$field_key] ?? ''));
+            if ($label === '') {
+                $label = trim((string) ($manifest[$field_key] ?? ''));
+            }
+            return $label !== '' ? $label : self::readable_label($field_key);
+        };
+        // 先按前端清单的顺序铺（= 表单字段顺序：姓名、邮箱、留言、应用、数量、产品参数…）
+        foreach (array_keys($manifest) as $field_key) {
+            if (isset($seen[$field_key])) {
+                $defaults[$field_key] = $resolve($field_key);
+            }
+        }
+        // 清单之外的历史字段（旧版提交过、前端已不再声明的）缀尾
         foreach (array_keys($seen) as $field_key) {
-            $default = trim((string) ($latest[$field_key] ?? ''));
-            $defaults[$field_key] = $default !== '' ? $default : self::readable_label($field_key);
+            if (!isset($defaults[$field_key])) {
+                $defaults[$field_key] = $resolve($field_key);
+            }
         }
 
         // 1) 用户排过的顺序优先（后台拖动排序就存在这里）
@@ -689,7 +782,7 @@ final class Email_Log_Notifications {
                 unset($defaults[$field_key]);
             }
         }
-        // 2) 其余按「前端提交时的出现顺序」（即表单顺序），没有额外的人为排序
+        // 2) 其余按前端清单的顺序（= 表单字段顺序），清单外的历史字段缀尾
 
         return array('fields' => $ordered + $defaults, 'sample' => $sample);
     }
