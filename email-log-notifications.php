@@ -143,13 +143,6 @@ final class Email_Log_Notifications {
     /** 访客标识 cookie：服务端签发、HttpOnly，脚本读不到 */
     const RATE_VISITOR_COOKIE = 'eln_vid';
 
-    /** 字段表展示顺序 */
-    private const FIELD_ORDER = array(
-        'fullName', 'email', 'message', 'application',
-        'outerDiameter', 'innerDiameter', 'length', 'supportingWeight',
-        'supportingDirection', 'material', 'finish', 'connections', 'quantity',
-    );
-
     /** 进页脚元信息、不进正文字段表的键（环境数据与来源信息都在这里） */
     private const META_FIELDS = array(
         'formVariant', 'pageUrl', 'pageTitle', 'pageTitleEn', 'locale',
@@ -157,16 +150,9 @@ final class Email_Log_Notifications {
     );
 
     /**
-     * 一条历史询盘都没有时，标签编辑器与邮件预览用这套字段占位。
-     * 就是本站表单的完整字段集——预览要能一眼看全所有标签，不能只挑几个。
+     * 预览/测试发信用的示例值（只是「值」：字段清单永远来自前端提交的历史，
+     * 这里没有的字段回退 'Sample'，不会凭空列出不存在的字段）。
      */
-    private const SAMPLE_FIELD_KEYS = array(
-        'fullName', 'email', 'message', 'application', 'quantity',
-        'outerDiameter', 'innerDiameter', 'length', 'supportingWeight',
-        'supportingDirection', 'material', 'finish', 'connections',
-    );
-
-    /** 上面那套字段的示例值（预览与测试发信共用） */
     private const SAMPLE_FIELD_VALUES = array(
         'fullName'            => 'Jane Doe',
         'email'               => 'jane.doe@example.com',
@@ -280,7 +266,7 @@ final class Email_Log_Notifications {
             'tpl_placeholders' => 'Placeholders:',
             'tpl_labels'       => 'Field labels',
             'tpl_labels_hint'  => 'Labels come from the form that submitted the inquiry. Anything set here overrides them; leave empty to fall back to the field name itself.',
-            'tpl_labels_sample' => 'These are sample fields for now; once the first inquiry arrives they switch to the real ones.',
+            'tpl_labels_sample' => 'No inquiry has reported any fields yet. The fields sent by the form will appear here automatically after the first inquiry.',
             'view_action'      => 'View',
             'restore_action'   => 'Restore',
             'delete_action'    => 'Delete',
@@ -405,7 +391,7 @@ final class Email_Log_Notifications {
             'tpl_placeholders' => '占位符：',
             'tpl_labels'       => '字段标签',
             'tpl_labels_hint'  => '默认用前端表单提交的字段标签；这里填了会覆盖它，留空则回退到字段名本身。',
-            'tpl_labels_sample' => '当前列出的是示例字段；收到第一封询盘后会自动换成真实字段。',
+            'tpl_labels_sample' => '还没有询盘提交过字段。收到第一封询盘后，表单提交的字段会自动出现在这里。',
             'view_action'      => '查看',
             'restore_action'   => '恢复',
             'delete_action'    => '删除',
@@ -530,7 +516,7 @@ final class Email_Log_Notifications {
             'tpl_placeholders' => '佔位符：',
             'tpl_labels'       => '欄位標籤',
             'tpl_labels_hint'  => '預設用前端表單送出的欄位標籤；這裡填了會覆蓋它，留空則回退到欄位名本身。',
-            'tpl_labels_sample' => '目前列出的是範例欄位；收到第一封詢盤後會自動換成真實欄位。',
+            'tpl_labels_sample' => '還沒有詢盤提交過欄位。收到第一封詢盤後，表單提交的欄位會自動出現在這裡。',
             'view_action'      => '檢視',
             'restore_action'   => '還原',
             'delete_action'    => '刪除',
@@ -647,8 +633,9 @@ final class Email_Log_Notifications {
     /**
      * 可改的字段集合：字段名 => 默认标签（**顺序 = 后台排出来的行序**）。
      *
-     * 来源依次为：历史询盘提交的 fieldLabels（含没填值的字段）、旧版 inquiry_fields、
-     * 后台已保存的标签键。一条都没有才退回 SAMPLE_FIELD_KEYS 占位。
+     * 字段清单**只认前端提交的数据**：历史询盘带来的 fieldLabels（含没填值的字段）、
+     * 旧版 inquiry_fields、后台已保存的标签键——不预置任何"应该有"的字段。
+     * 一条历史都没有时返回空集合，编辑器显示空态提示；收到询盘后自动出现。
      * 标签编辑器、邮件预览、测试发信都读它，保证三处字段集永远一致。
      *
      * @param array|null $preferred 当前模板保存的 labels，其键序决定列表顺序（用户拖过就是它）
@@ -661,6 +648,7 @@ final class Email_Log_Notifications {
 
         // fieldLabels 是「字段名 => 标签」的完整集合（含没填值的字段），
         // inquiry_fields 是旧版本只记非空字段的产物；两者都收，才能列全表单字段。
+        // 按 meta_id 倒序读：最新一封询盘的字段顺序（= 表单上的顺序）优先。
         $rows = $wpdb->get_col(
             "SELECT meta_value FROM {$wpdb->postmeta}
              WHERE meta_key IN ('inquiry_field_labels', 'inquiry_fields')
@@ -684,15 +672,7 @@ final class Email_Log_Notifications {
             $seen[$field_key] = true;
         }
 
-        $sample = false;
-        if (!$seen) {
-            $sample = true;
-        }
-        // 表单契约字段恒在：真实询盘只提交了 4 个字段时，标签编辑器也要能编辑全量
-        // （历史数据是「补充」，不是唯一来源——否则新站/少字段询盘会把列表缩水）
-        foreach (self::SAMPLE_FIELD_KEYS as $field_key) {
-            $seen[$field_key] = true;
-        }
+        $sample = !$seen; // 空集合 = 还没有任何历史字段，界面给空态提示
 
         $latest = self::latest_field_labels();
         $defaults = array();
@@ -709,14 +689,7 @@ final class Email_Log_Notifications {
                 unset($defaults[$field_key]);
             }
         }
-        // 2) 没排过的按 FIELD_ORDER，再按字段名
-        foreach (self::FIELD_ORDER as $field_key) {
-            if (isset($defaults[$field_key])) {
-                $ordered[$field_key] = $defaults[$field_key];
-                unset($defaults[$field_key]);
-            }
-        }
-        ksort($defaults);
+        // 2) 其余按「前端提交时的出现顺序」（即表单顺序），没有额外的人为排序
 
         return array('fields' => $ordered + $defaults, 'sample' => $sample);
     }
@@ -1786,7 +1759,7 @@ HTML;
             ? self::t('form_modal') : self::t('form_page');
     }
 
-    /** 字段表行：单位后缀并入数值，FIELD_ORDER 定序，未知字段缀尾 */
+    /** 字段表行：单位后缀并入数值；行序 = 标签表顺序（拖过）或前端提交顺序 */
     private static function build_rows(array $fields, array $staged, ?array $labels = null): string {
         // 1) 单位并入数值（quantityUnit → "500 PCS"）
         $merged = array();
@@ -1802,16 +1775,10 @@ HTML;
             $merged[$key] = $value;
         }
 
-        // 2) 排序：**后台「字段标签」里排出来的顺序就是行序**（用户能拖）。
-        //    没排过的字段再按 FIELD_ORDER 补在后面，最后是未知字段。
+        // 2) 排序：**后台「字段标签」里排出来的顺序就是行序**（用户能拖）；
+        //    没排过的字段保持前端提交时的顺序（数组顺序 = 表单顺序），不做人为排序。
         $ordered = array();
         foreach (array_keys((array) $labels) as $key) {
-            if (isset($merged[$key])) {
-                $ordered[$key] = $merged[$key];
-                unset($merged[$key]);
-            }
-        }
-        foreach (self::FIELD_ORDER as $key) {
             if (isset($merged[$key])) {
                 $ordered[$key] = $merged[$key];
                 unset($merged[$key]);
