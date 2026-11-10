@@ -1475,7 +1475,7 @@ final class Email_Log_Notifications {
     }
 
     /**
-     * 询盘序号：站点时区的年月日 + 当日流水号，如 20261105001。
+     * 询盘序号：IN- + 站点时区的年月日 + 当日流水号，如 IN-20261105001。
      * 用 MySQL 的 LAST_INSERT_ID(expr) 做原子自增，避免并发提交拿到同一个号。
      */
     private static function next_inquiry_no(): string {
@@ -1494,7 +1494,7 @@ final class Email_Log_Notifications {
         ));
         $seq = (int) $wpdb->get_var('SELECT LAST_INSERT_ID()');
 
-        return $day . str_pad((string) max(1, $seq), 3, '0', STR_PAD_LEFT);
+        return 'IN-' . $day . str_pad((string) max(1, $seq), 3, '0', STR_PAD_LEFT);
     }
 
     /**
@@ -1695,7 +1695,7 @@ HTML;
             '{{source}}'       => esc_html($source_label),
             '{{form_type}}'    => esc_html($form_type),
             '{{rows}}'         => $rows,
-            '{{no}}'           => esc_html($inquiry_no !== '' ? $inquiry_no : current_time('Ymd') . '001'),
+            '{{no}}'           => esc_html($inquiry_no !== '' ? $inquiry_no : 'IN-' . current_time('Ymd') . '001'),
             '{{time}}'         => esc_html(date_i18n('Y-m-d H:i:s T', $timestamp)),
             '{{time_local}}'   => esc_html($local_time),
             '{{ip}}'           => esc_html(self::client_ip()),
@@ -1953,7 +1953,7 @@ HTML;
             $id  = (int) $id;
             $day = mysql2date('Ymd', (string) get_post_field('post_date', $id));
             $used[$day] = ($used[$day] ?? 0) + 1;
-            update_post_meta($id, 'inquiry_no', $day . str_pad((string) $used[$day], 3, '0', STR_PAD_LEFT));
+            update_post_meta($id, 'inquiry_no', 'IN-' . $day . str_pad((string) $used[$day], 3, '0', STR_PAD_LEFT));
         }
 
         // 补出来的号已经占用了当天前 N 个流水位，计数器必须跟上
@@ -2102,12 +2102,13 @@ HTML;
             return;
         }
 
-        // 编号排序：inquiry_no 是 14 位数字串，按数值序排（升/降跟随表头点击）
+        // 编号排序：IN-YYYYMMDDXXX 前缀恒定、后缀定宽补零，字符串序即时间序。
+        // （旧的纯数字编号也排在 IN- 之前，和历史先后一致；数值序对带前缀的串会全变 0，不能用）
         // phpcs:disable WordPress.Security.NonceVerification
         if (isset($_GET['orderby']) && $_GET['orderby'] === 'inquiry_no') {
             $order = isset($_GET['order']) && strtoupper((string) $_GET['order']) === 'ASC' ? 'ASC' : 'DESC';
             $query->set('meta_key', 'inquiry_no');
-            $query->set('orderby', 'meta_value_num');
+            $query->set('orderby', 'meta_value');
             $query->set('order', $order);
         }
         // phpcs:enable
@@ -2135,7 +2136,7 @@ HTML;
             return;
         }
         echo '<style>'
-            . '.fixed .column-inquiry_no{width:130px;}'
+            . '.fixed .column-inquiry_no{width:150px;}'
             . '.fixed .column-inquiry_email{width:180px;overflow-wrap:anywhere;}'
             . '.fixed .column-inquiry_source{width:20%;}'
             . '.fixed .column-inquiry_attachments{width:13%;}'
@@ -2155,7 +2156,7 @@ HTML;
     }
 
     /** 列表列：编号（点击进详情）/ 姓名 / 邮箱 / 来源 / 附件 / 发信 / 日期 */
-    /** 可排序的列表列：编号按 inquiry_no 的数值序，和日期列一样的点击体验 */
+    /** 可排序的列表列：编号按 inquiry_no 的字符串序（前缀恒定，等价于时间序），和日期列一样的点击体验 */
     public static function sortable_columns(array $columns): array {
         $columns['inquiry_no'] = 'inquiry_no';
         return $columns;
