@@ -610,36 +610,30 @@ final class Email_Log_Notifications {
         return self::readable_label($key);
     }
 
-    /** 字段名的可读化兜底：fullName → Full Name */
+    /**
+     * 字段名的可读化：插件对字段名做的唯一「翻译」。
+     * outerDiameter → Outer Diameter；shaft_diameter → Shaft Diameter；material1 → Material 1
+     */
     private static function readable_label(string $key): string {
-        return ucwords(preg_replace('/(?<!^)[A-Z]/', ' $0', $key));
-    }
-
-    /** 最近一封询盘带来的字段标签（前端自己的措辞），作编辑器占位与预览示例 */
-    private static function latest_field_labels(): array {
-        global $wpdb;
-        static $labels = null;
-        if ($labels === null) {
-            $post_id = (int) $wpdb->get_var(
-                "SELECT post_id FROM {$wpdb->postmeta}
-                 WHERE meta_key = 'inquiry_field_labels' AND meta_value <> 'a:0:{}'
-                 ORDER BY meta_id DESC LIMIT 1"
-            );
-            $labels = $post_id ? (array) get_post_meta($post_id, 'inquiry_field_labels', true) : array();
-        }
-        return $labels;
+        $label = preg_replace('/(?<!^)[A-Z]/', ' $0', $key);          // 驼峰拆词
+        $label = str_replace(array('-', '_'), ' ', (string) $label);   // 连字符/下划线变空格
+        $label = preg_replace('/(?<=[a-zA-Z])(?=\d)/', ' ', (string) $label); // 字母与数字之间留空格
+        $label = preg_replace('/\s+/', ' ', (string) $label);
+        return ucwords(trim((string) $label));
     }
 
     /**
-     * 前端的「完整字段清单」：站点构建产物 /inquiry-fields.json（字段名 => 当前语言的显示标签）。
+     * 前端的「字段清单」：站点构建产物 /inquiry-fields.json 里的**字段名与顺序**。
      *
-     * 插件不内置任何字段表——清单由前端声明（公共字段来自 i18n 表单文案，
-     * 产品字段来自各产品的 formRows）。站点 origin 取最近一封询盘记录的 pageUrl，
-     * 语言跟随该询盘的页面语言；结果 transient 缓存 1 小时，取不到就退回空数组
-     * （编辑器只剩历史询盘带来过的字段，不会凭空出现任何字段）。
+     * 插件只用它回答「有哪些字段、表单里什么顺序」——标签一概不取前端译文，
+     * 默认标签永远由 readable_label() 把字段名格式化出来（outerDiameter → Outer Diameter），
+     * 想要别的说法就在标签编辑器里自己填，这才是插件与前端文案的彻底解耦。
+     *
+     * 站点 origin 取最近一封询盘记录的 pageUrl；结果 transient 缓存 1 小时，
+     * 取不到就退回空数组（只剩历史询盘带来过的字段名，照样格式化显示）。
      */
     private static function frontend_field_manifest(): array {
-        $cached = get_transient('eln_field_manifest');
+        $cached = get_transient('eln_field_keys');
         if (is_array($cached)) {
             return $cached;
         }
@@ -652,62 +646,48 @@ final class Email_Log_Notifications {
         );
         $empty = array();
         if (!$recent) {
-            set_transient('eln_field_manifest', $empty, MINUTE_IN_SECONDS);
+            set_transient('eln_field_keys', $empty, MINUTE_IN_SECONDS);
             return $empty;
         }
 
         $page_url = (string) get_post_meta((int) $recent->post_id, 'inquiry_page_url', true);
         $parts    = wp_parse_url($page_url);
         if (empty($parts['scheme']) || empty($parts['host'])) {
-            set_transient('eln_field_manifest', $empty, MINUTE_IN_SECONDS);
+            set_transient('eln_field_keys', $empty, MINUTE_IN_SECONDS);
             return $empty;
         }
         $origin = $parts['scheme'] . '://' . $parts['host'] . (isset($parts['port']) ? ':' . (int) $parts['port'] : '');
 
         $response = wp_remote_get($origin . '/inquiry-fields.json', array('timeout' => 2));
         if (is_wp_error($response) || (int) wp_remote_retrieve_response_code($response) !== 200) {
-            set_transient('eln_field_manifest', $empty, MINUTE_IN_SECONDS);
+            set_transient('eln_field_keys', $empty, MINUTE_IN_SECONDS);
             return $empty;
         }
         $json    = json_decode((string) wp_remote_retrieve_body($response), true);
         $locales = (is_array($json) && isset($json['locales']) && is_array($json['locales'])) ? $json['locales'] : array();
         if (!$locales) {
-            set_transient('eln_field_manifest', $empty, MINUTE_IN_SECONDS);
+            set_transient('eln_field_keys', $empty, MINUTE_IN_SECONDS);
             return $empty;
         }
 
-        // 语言跟随最近一封询盘的页面语言（zh-Hans → zh-hans），对不上就找同语族，再不行用第一份
-        $locale_meta = strtolower(str_replace('_', '-', (string) get_post_meta((int) $recent->post_id, 'inquiry_locale', true)));
-        $pick = null;
-        if ($locale_meta !== '' && isset($locales[$locale_meta])) {
-            $pick = $locales[$locale_meta];
-        } elseif (str_starts_with($locale_meta, 'zh-hant') && isset($locales['zh-hant'])) {
-            $pick = $locales['zh-hant'];
-        } elseif (str_starts_with($locale_meta, 'zh') && isset($locales['zh-hans'])) {
-            $pick = $locales['zh-hans'];
-        } elseif (isset($locales['en'])) {
-            $pick = $locales['en'];
-        } else {
-            $pick = reset($locales);
-        }
-
-        $clean = array();
+        // 任取一份语言清单即可——只需要字段名，名字在三种语言里一样
+        $pick = reset($locales);
+        $keys = array();
         foreach ((array) $pick as $key => $label) {
-            if (is_string($key) && $key !== '' && is_string($label) && trim($label) !== '') {
-                $clean[$key] = trim($label);
+            if (is_string($key) && $key !== '') {
+                $keys[] = $key;
             }
         }
-        set_transient('eln_field_manifest', $clean, HOUR_IN_SECONDS);
-        return $clean;
+        set_transient('eln_field_keys', $keys, HOUR_IN_SECONDS);
+        return $keys;
     }
 
     /**
      * 可改的字段集合：字段名 => 默认标签（**顺序 = 后台排出来的行序**）。
      *
-     * 字段清单**只认前端提交的数据**：历史询盘带来的 fieldLabels（含没填值的字段）、
-     * 旧版 inquiry_fields、后台已保存的标签键——不预置任何"应该有"的字段。
-     * 一条历史都没有时返回空集合，编辑器显示空态提示；收到询盘后自动出现。
-     * 标签编辑器、邮件预览、测试发信都读它，保证三处字段集永远一致。
+     * 字段名从哪来：前端清单（/inquiry-fields.json 的字段名与顺序）+ 历史询盘带来过的字段，
+     * 插件不预置任何字段。默认标签**只做字段名格式化**（outerDiameter → Outer Diameter），
+     * 不取前端任何语言的译文——要改说法就在编辑器里自己填，这才是与前端文案的解耦。
      *
      * @param array|null $preferred 当前模板保存的 labels，其键序决定列表顺序（用户拖过就是它）
      */
@@ -718,7 +698,7 @@ final class Email_Log_Notifications {
         $seen      = array();
 
         // fieldLabels 是「字段名 => 标签」的完整集合（含没填值的字段），
-        // inquiry_fields 是旧版本只记非空字段的产物；两者都收，才能列全表单字段。
+        // inquiry_fields 是旧版本只记非空字段的产物；两者都收，才能列全历史字段名。
         // 按 meta_id 倒序读：最新一封询盘的字段顺序（= 表单上的顺序）优先。
         $rows = $wpdb->get_col(
             "SELECT meta_value FROM {$wpdb->postmeta}
@@ -743,34 +723,24 @@ final class Email_Log_Notifications {
             $seen[$field_key] = true;
         }
 
-        // 前端声明的完整字段清单（/inquiry-fields.json）：字段集与默认标签的第一来源。
-        // 历史询盘只带来"实际提交过"的那几行，清单负责补齐表单可能出现的全部字段。
+        // 前端声明的字段名清单（只取名字与顺序）：补齐表单可能出现、但还没有询盘提交过的字段
         $manifest = self::frontend_field_manifest();
-        foreach (array_keys($manifest) as $field_key) {
+        foreach ($manifest as $field_key) {
             $seen[$field_key] = true;
         }
 
         $sample = !$seen; // 什么都没有 = 完全没有字段来源，界面给空态提示
 
-        $latest = self::latest_field_labels();
+        // 默认标签 = 字段名格式化（插件唯一的"翻译"手段），清单外的历史字段同理
         $defaults = array();
-        $resolve = static function (string $field_key) use ($latest, $manifest): string {
-            $label = trim((string) ($latest[$field_key] ?? ''));
-            if ($label === '') {
-                $label = trim((string) ($manifest[$field_key] ?? ''));
-            }
-            return $label !== '' ? $label : self::readable_label($field_key);
-        };
-        // 先按前端清单的顺序铺（= 表单字段顺序：姓名、邮箱、留言、应用、数量、产品参数…）
-        foreach (array_keys($manifest) as $field_key) {
+        foreach ($manifest as $field_key) {
             if (isset($seen[$field_key])) {
-                $defaults[$field_key] = $resolve($field_key);
+                $defaults[$field_key] = self::readable_label($field_key);
             }
         }
-        // 清单之外的历史字段（旧版提交过、前端已不再声明的）缀尾
         foreach (array_keys($seen) as $field_key) {
             if (!isset($defaults[$field_key])) {
-                $defaults[$field_key] = $resolve($field_key);
+                $defaults[$field_key] = self::readable_label($field_key);
             }
         }
 
