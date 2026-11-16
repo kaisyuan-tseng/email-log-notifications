@@ -28,7 +28,7 @@
  *   - 限流：同一可信请求标识 1 分钟 3 次 / 1 小时 10 次，超限 429 + Retry-After
  *
  * 附件留档：保存到 wp-content/uploads/inquiries/{年月}/{文章ID-随机}/
- *   （在 uploads 下，主站 nginx 与 WP 两个域都能直接打开；随机目录名防猜测）；
+ *   （在 uploads 下可直接访问；随机目录名防猜测）；
  *   邮件附件来自留档路径（真实附件）；删除询盘记录时附件一并清理。
  *
  * 后台交互：标题列即「姓名」，点标题直接打开只读详情；来源列标注具体页面；
@@ -79,7 +79,7 @@ final class Email_Log_Notifications {
      */
     const BRAND_COLOR    = '#04979e';
 
-    /** 附件总目录（在 uploads 下，主站 nginx 直接静态输出） */
+    /** 附件总目录（在 uploads 下，可静态访问） */
     private const STORAGE_DIR = 'inquiries';
 
     /** 模板页用的 CodeMirror 设置（enqueue 时拿到，footer 打印脚本时用） */
@@ -99,7 +99,7 @@ final class Email_Log_Notifications {
         return str_replace('\\', '/', $path);
     }
 
-    /** 上传目录信息（附件放在 uploads 下，主站 nginx 直接静态输出，浏览器可直开） */
+    /** 上传目录信息（附件放在 uploads 下，浏览器可直开） */
     private static function uploads_dir(): array {
         static $u = null;
         if ($u === null) {
@@ -623,63 +623,23 @@ final class Email_Log_Notifications {
     }
 
     /**
-     * 前端的「字段清单」：站点构建产物 /inquiry-fields.json 里的**字段名与顺序**。
+     * 字段清单：只从站点配置或 eln_field_manifest 过滤器取字段名与顺序。
      *
-     * 插件只用它回答「有哪些字段、表单里什么顺序」——标签一概不取前端译文，
-     * 默认标签永远由 readable_label() 把字段名格式化出来（outerDiameter → Outer Diameter），
-     * 想要别的说法就在标签编辑器里自己填，这才是插件与前端文案的彻底解耦。
-     *
-     * 站点 origin 取最近一封询盘记录的 pageUrl；结果 transient 缓存 1 小时，
-     * 取不到就退回空数组（只剩历史询盘带来过的字段名，照样格式化显示）。
+     * 不再根据访客提交的 pageUrl 发起服务端 HTTP 请求（SSRF 风险）。
+     * 默认标签由 readable_label() 把字段名格式化出来；历史字段名由 label_fields() 从 meta 补充。
      */
     private static function frontend_field_manifest(): array {
-        $cached = get_transient('eln_field_keys');
-        if (is_array($cached)) {
-            return $cached;
+        $manifest = apply_filters('eln_field_manifest', array());
+        if (!is_array($manifest)) {
+            return array();
         }
-
-        global $wpdb;
-        $recent = $wpdb->get_row(
-            "SELECT pm.post_id FROM {$wpdb->postmeta} pm
-             WHERE pm.meta_key = 'inquiry_page_url'
-             ORDER BY pm.meta_id DESC LIMIT 1"
-        );
-        $empty = array();
-        if (!$recent) {
-            set_transient('eln_field_keys', $empty, MINUTE_IN_SECONDS);
-            return $empty;
-        }
-
-        $page_url = (string) get_post_meta((int) $recent->post_id, 'inquiry_page_url', true);
-        $parts    = wp_parse_url($page_url);
-        if (empty($parts['scheme']) || empty($parts['host'])) {
-            set_transient('eln_field_keys', $empty, MINUTE_IN_SECONDS);
-            return $empty;
-        }
-        $origin = $parts['scheme'] . '://' . $parts['host'] . (isset($parts['port']) ? ':' . (int) $parts['port'] : '');
-
-        $response = wp_remote_get($origin . '/inquiry-fields.json', array('timeout' => 2));
-        if (is_wp_error($response) || (int) wp_remote_retrieve_response_code($response) !== 200) {
-            set_transient('eln_field_keys', $empty, MINUTE_IN_SECONDS);
-            return $empty;
-        }
-        $json    = json_decode((string) wp_remote_retrieve_body($response), true);
-        $locales = (is_array($json) && isset($json['locales']) && is_array($json['locales'])) ? $json['locales'] : array();
-        if (!$locales) {
-            set_transient('eln_field_keys', $empty, MINUTE_IN_SECONDS);
-            return $empty;
-        }
-
-        // 任取一份语言清单即可——只需要字段名，名字在三种语言里一样
-        $pick = reset($locales);
         $keys = array();
-        foreach ((array) $pick as $key => $label) {
+        foreach ($manifest as $key) {
             if (is_string($key) && $key !== '') {
                 $keys[] = $key;
             }
         }
-        set_transient('eln_field_keys', $keys, HOUR_IN_SECONDS);
-        return $keys;
+        return array_values(array_unique($keys));
     }
 
     /**
@@ -832,8 +792,8 @@ final class Email_Log_Notifications {
         }
 
         // ---------- 限流：1 分钟 3 次 / 1 小时 10 次 ----------
-        // 标识优先用链路里的公网 IP；frp 是 TCP 穿透，nginx 看到的源地址恒为回环，
-        // 这时改用服务端签发的 HttpOnly 访客 cookie，避免把全站访客算成一个人。
+        // 标识优先用链路里的可信地址；拿不到时用服务端签发的 HttpOnly 访客 cookie，
+        // 避免把经同一出口访问的访客算成一个人。
         $retry_after = self::rate_consume(self::rate_identity());
         if ($retry_after > 0) {
             $response = new WP_REST_Response(array(
@@ -1125,10 +1085,8 @@ final class Email_Log_Notifications {
     /**
      * 限流用的请求标识（与邮件里的 {{ip}} 分开：那边如实记录服务端看到的地址）。
      *
-     *   1. 先扫 X-Forwarded-For / X-Real-IP / REMOTE_ADDR，取第一个公网 IP；
-     *      将来 frp 换成 http 代理或启用 PROXY protocol 后会自动按真实 IP 分桶。
-     *   2. 本机反代 / TCP 穿透下全是回环或私网地址，退化成服务端签发的
-     *      HttpOnly cookie（前端脚本读不到也改不了），每个访客一个桶。
+     *   1. 默认只取 REMOTE_ADDR；只有配置的可信代理才采信 X-Forwarded-For / X-Real-IP；
+     *   2. 回环或私网地址退化成服务端签发的 HttpOnly cookie（带 HMAC 签名），每个访客一个桶。
      *
      * 注意：cookie 是"区分访客"用的，不是身份凭证；丢弃 cookie 的客户端
      * 会拿到新标识，所以要拦住无状态刷接口还得靠链路层拿到真实 IP。
@@ -1207,10 +1165,9 @@ final class Email_Log_Notifications {
     }
 
     /**
-     * 提交者 IP：**只认服务端识别**（X-Real-IP / X-Forwarded-For / REMOTE_ADDR），
-     * 前端上报的一律忽略——同源 nginx 反代已经带上真实来源，前端传的只是自证，
-     * 既不可信也没有额外价值（穿透场景下两边看到的都是回环地址）。
-     * 限流标识另算（见 rate_identity()）：优先真实公网 IP，回环时改用访客 cookie。
+     * 提交者 IP：**只认服务端识别**，前端上报的一律忽略。
+     * 是否采信代理头由可信代理配置决定，避免客户端伪造头污染日志。
+     * 限流标识另算（见 rate_identity()）：优先可信链路地址，回环时改用访客 cookie。
      */
     private static function client_ip(): string {
         foreach (array('HTTP_X_REAL_IP', 'HTTP_X_FORWARDED_FOR', 'REMOTE_ADDR') as $key) {
@@ -2303,26 +2260,28 @@ HTML;
         }
 
         if ($post->post_status === 'trash') {
-            $restore = wp_nonce_url(
-                admin_url('post.php?post=' . $post->ID . '&action=untrash'),
-                'untrash-post_' . $post->ID
+            $actions = array(
+                'untrash' => '<a href="' . esc_url(wp_nonce_url(
+                    admin_url('post.php?post=' . $post->ID . '&action=untrash'),
+                    'untrash-post_' . $post->ID
+                )) . '">' . esc_html(self::t('restore_action')) . '</a>',
             );
-            $permanent = wp_nonce_url(
-                admin_url('admin-post.php?action=inquiry_delete&id=' . $post->ID),
-                'inquiry_del_' . $post->ID
-            );
-            return array(
-                'untrash' => '<a href="' . esc_url($restore) . '">' . esc_html(self::t('restore_action')) . '</a>',
-                'delete'  => '<a href="' . esc_url($permanent) . '" style="color:#b32d2e;" onclick="return confirm(\''
-                           . esc_js(self::t('confirm_delete')) . '\');">' . esc_html(self::t('delete_action')) . '</a>',
-            );
+            if (current_user_can('delete_post', $post->ID)) {
+                $permanent = wp_nonce_url(
+                    admin_url('admin-post.php?action=inquiry_delete&id=' . $post->ID),
+                    'inquiry_del_' . $post->ID
+                );
+                $actions['delete'] = '<a href="' . esc_url($permanent) . '" style="color:#b32d2e;" onclick="return confirm(\''
+                    . esc_js(self::t('confirm_delete')) . '\');">' . esc_html(self::t('delete_action')) . '</a>';
+            }
+            return $actions;
         }
 
         $actions = array(
             'view' => '<a class="eln-open" href="' . esc_url(admin_url('admin.php?page=' . self::VIEW_SLUG . '&id=' . $post->ID))
                     . '" data-id="' . (int) $post->ID . '">' . esc_html(self::t('view_action')) . '</a>',
         );
-        if (current_user_can('delete_posts')) {
+        if (current_user_can('delete_post', $post->ID)) {
             $url = wp_nonce_url(
                 admin_url('admin-post.php?action=inquiry_delete&id=' . $post->ID),
                 'inquiry_del_' . $post->ID
@@ -2335,13 +2294,13 @@ HTML;
 
     /** 删除询盘（连带附件）：管理员专用，其余只读 */
     public static function handle_delete(): void {
-        if (!current_user_can('delete_posts')) {
-            wp_die(esc_html(self::t('invalid_request')));
-        }
         $post_id = isset($_GET['id']) ? absint($_GET['id']) : 0; // phpcs:ignore WordPress.Security.NonceVerification
         check_admin_referer('inquiry_del_' . $post_id);
         if (!$post_id || get_post_type($post_id) !== self::POST_TYPE) {
             wp_die(esc_html(self::t('not_found_msg')));
+        }
+        if (!current_user_can('delete_post', $post_id)) {
+            wp_die(esc_html(self::t('invalid_request')));
         }
         wp_delete_post($post_id, true); // before_delete_post 钩子会联动清理附件
         wp_safe_redirect(add_query_arg('inquiry_deleted', 1, admin_url('edit.php?post_type=' . self::POST_TYPE)));
@@ -2401,7 +2360,7 @@ HTML;
             null,
             self::t('view_page_title'),
             self::t('view_page_title'),
-            'read',
+            'edit_posts',
             self::VIEW_SLUG,
             array(__CLASS__, 'render_view_page')
         );
@@ -2418,7 +2377,7 @@ HTML;
     /** AJAX：取一条询盘的正文，给列表页的「查看」弹窗用 */
     public static function ajax_inquiry_detail(): void {
         check_ajax_referer('eln_inquiry_detail', 'nonce');
-        if (!current_user_can('read')) {
+        if (!current_user_can('edit_posts')) {
             wp_send_json_error(array('message' => 'forbidden'), 403);
         }
 
@@ -2426,6 +2385,9 @@ HTML;
         $post = $id ? get_post($id) : null;
         if (!$post || $post->post_type !== self::POST_TYPE) {
             wp_send_json_error(array('message' => 'not found'), 404);
+        }
+        if (!current_user_can('edit_post', $id)) {
+            wp_send_json_error(array('message' => 'forbidden'), 403);
         }
 
         $notify = (string) get_post_meta($id, 'inquiry_mail_sent', true);
@@ -2442,7 +2404,7 @@ HTML;
             'attach' => self::attachments_html($id), // 附件直链（与列表「附件」列同源）
             // 弹窗「删除」按钮：与列表行操作同一端点、同一 nonce 口径；无权限时为 null。
             // wp_nonce_url 会把 & 转成 &#038; 实体（那是给 HTML 属性用的），这里要走 JSON，得先还原成裸 &
-            'delete' => current_user_can('delete_posts')
+            'delete' => current_user_can('delete_post', $id)
                 ? htmlspecialchars_decode(wp_nonce_url(admin_url('admin-post.php?action=inquiry_delete&id=' . $id), 'inquiry_del_' . $id), ENT_QUOTES)
                 : null,
             'state'  => $state, // all | partial | none
@@ -2861,7 +2823,7 @@ HTML;
 
     /** 详情页入参校验（load-* 阶段执行，早于任何输出） */
     public static function guard_view_page(): void {
-        if (!current_user_can('read')) {
+        if (!current_user_can('edit_posts')) {
             wp_die('Insufficient permissions.', '', array('response' => 403));
         }
 
@@ -2869,12 +2831,15 @@ HTML;
         $post    = $post_id ? get_post($post_id) : null;
         if (!$post || $post->post_type !== self::POST_TYPE) {
             wp_die(esc_html(self::t('not_found_msg')), '', array('response' => 404));
+        }
+        if (!current_user_can('edit_post', $post_id)) {
+            wp_die('Insufficient permissions.', '', array('response' => 403));
         }
     }
 
     /** 只读详情页：只留邮件正文；元信息表与正文重复，已去掉 */
     public static function render_view_page(): void {
-        if (!current_user_can('read')) {
+        if (!current_user_can('edit_posts')) {
             wp_die('Insufficient permissions.', '', array('response' => 403));
         }
 
@@ -2883,8 +2848,11 @@ HTML;
         if (!$post || $post->post_type !== self::POST_TYPE) {
             wp_die(esc_html(self::t('not_found_msg')), '', array('response' => 404));
         }
+        if (!current_user_can('edit_post', $post_id)) {
+            wp_die('Insufficient permissions.', '', array('response' => 403));
+        }
 
-        $delete_url = current_user_can('delete_posts')
+        $delete_url = current_user_can('delete_post', $post_id)
             ? wp_nonce_url(admin_url('admin-post.php?action=inquiry_delete&id=' . $post_id), 'inquiry_del_' . $post_id)
             : '';
         ?>
@@ -2957,9 +2925,6 @@ HTML;
     /** 人工回信模板：从未保存过 → 显示内置默认；保存过 → 原样尊重（包括留空） */
     public static function reply_tpl(): array {
         $tpl = get_option(self::OPT_REPLY);
-        global $wpdb;
-        $raw = $wpdb->get_var($wpdb->prepare("SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", self::OPT_REPLY));
-        file_put_contents('E:/01-DigitalHub/Repositories/WordPress/wp-content/plugins/email-log-notifications/_replytpl.log', date('H:i:s') . ' get_opt=' . wp_json_encode($tpl) . ' is_arr=' . var_export(is_array($tpl), true) . ' raw_row=' . var_export($raw, true) . "\n", FILE_APPEND);
         if (!is_array($tpl)) {
             return self::reply_template_default();
         }
@@ -3841,7 +3806,7 @@ JS;
      * 发一封测试邮件。
      *
      * 收件人固定用询盘收件人（admin_email / filter eln_recipient），
-     * 也就是 sales03@leflexo.com —— 两套模板都往同一个信箱发，方便对比。
+     * 两套模板发往同一收件箱，便于对比。
      * 自动确认页发的是「当前语言组」的模板，不是默认组。
      */
     public static function handle_test_mail(): void {

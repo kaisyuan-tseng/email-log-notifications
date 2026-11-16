@@ -79,7 +79,7 @@ fieldLabels[outerDiameter]=外径
 
 同一可信请求标识 **1 分钟最多 3 次、1 小时最多 10 次**。两个都是固定窗口，各自按该窗口内首次提交起算，到点自动清零；超限时返回 `429`，响应体带 `retry_after`、响应头带 `Retry-After`（秒）。被拒的请求本身不计数，等过窗口即可恢复。
 
-标识优先取 `X-Forwarded-For` / `X-Real-IP` / `REMOTE_ADDR` 链里第一个公网 IP；本站 frp 是 TCP 穿透，nginx 看到的源地址恒为 `127.0.0.1`，因此退化成服务端签发的 HttpOnly cookie `eln_vid`（前端脚本读不到也改不了），每个访客一个桶。要按真实公网 IP 分桶，需在穿透层启用 PROXY protocol 或改用 http 代理，届时代码会自动切过去。
+默认只取 `REMOTE_ADDR`；只有配置的可信代理才采信 `X-Forwarded-For` / `X-Real-IP`。拿不到公网地址时退化成服务端签发的 HttpOnly cookie `eln_vid`（带 HMAC 签名，前端脚本读不到也改不了），每个访客一个桶。需要按真实公网 IP 分桶时，请在反代层正确传递并配置可信代理。
 
 ### 2.6 询盘编号
 
@@ -106,10 +106,9 @@ const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 if (tz) data.append("timezone", tz);
 ```
 
-- **不要再传 `ip`**。同源反代已经把真实来源放在 `X-Real-IP` 里，前端自报的 IP 只是自证，服务端会直接丢弃（`normalize_env_fields()`）。
+- **不要再传 `ip`**。服务端只采信链路识别到的来源，前端自报的 IP 一律丢弃（`normalize_env_fields()`）。
 - 时区同时用于渲染 `{{time_local}}`（按访客时区换算的提交时间），拿不到就整行不显示。
-- 走内网穿透（frp）时，nginx 看到的源地址恒为回环，服务端识别到的会是 `127.0.0.1` —— 要拿真实公网 IP 得让穿透层传 `X-Forwarded-For` 或启用 PROXY protocol。这是链路限制，不是插件问题。
-- 本站 nginx 里那个 `location = /ip` 端点已不再被前端调用，可以删掉。
+- 若站点位于反代或穿透之后，请让链路正确传递客户端来源，并在插件配置中声明可信代理；否则服务端只能看到回环地址。这是链路配置问题，不是插件问题。
 
 ### 2.8 响应
 
@@ -309,7 +308,7 @@ async function submit() {
 - 前端对 429 显示「提交太频繁」专属提示，其余非 2xx 用通用失败提示。
 - 附件只校验扩展名与大小；落盘目录名含随机串，实际不可枚举。
 - 只接受 `multipart/form-data`；发 JSON 会被判为"缺必填字段"。
-- 请求体上限：nginx `client_max_body_size 60m`、PHP `post_max_size 64m`。
+- 请求体上限：由 Web 服务器的请求体限制与 PHP `post_max_size` 共同决定，请按附件白名单容量配置。
 
 ---
 
@@ -328,7 +327,7 @@ add_filter('eln_recipient', fn() => 'sales@example.com');
 ```
 
 3. **附件上限 / 白名单**：`eln_max_files` 可改数量；白名单在插件常量 `FILE_GROUPS` 里。
-4. **反代命名空间**：nginx 只放行 `/wp-json/(email-log-notifications|lfx)/`，新项目按需调整。
+4. **反代命名空间**：由站点反代配置决定哪些 REST 命名空间对外放行，新项目按需调整。
 5. **页面标题规范化**（可选）：不做的话，来源列显示前端提交的 `pageTitle`；做了就有统一英文口径。
 
 ---
