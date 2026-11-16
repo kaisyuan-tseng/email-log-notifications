@@ -4,6 +4,7 @@
 .distignore
 INTEGRATION.md
 *.log
+*~
 composer.json
 composer.lock
 phpcs.xml.dist

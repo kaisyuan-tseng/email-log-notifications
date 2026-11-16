@@ -8,6 +8,7 @@ desktop.ini
 *.zip
 *.tar.gz
 *.log
+*~
 
 # 工具链与临时脚本
 vendor/
