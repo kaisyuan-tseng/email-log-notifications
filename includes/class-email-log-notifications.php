@@ -35,7 +35,7 @@
  *   无 Add New、无编辑/快速编辑、直连 edit 被拦；删除仅对有 delete_posts
  *   权限的用户（管理员）开放，删除时连同附件一起清掉。
  *
- * 邮件模板：两个标签页共用一套编辑器（源码 + 实时预览 + 测试发信 + 恢复默认）
+ * 邮件模板：两个标签页共用一套编辑器（源码 + 实时预览 + 测试发信）
  *   - 询盘通知  option eln_template（subject / html / labels）
  *   - 自动确认   option eln_autoreply（enabled + 语言组），默认关闭
  *     语言组按访客浏览器语言匹配：完整标签（zh-CN）→ 主语言（zh）→ 默认组（兜底）；
@@ -174,10 +174,8 @@ final class Email_Log_Notifications {
 		add_action( 'admin_menu', array( __CLASS__, 'register_template_page' ) );
 		add_action( 'admin_init', array( __CLASS__, 'register_template_setting' ) );
 		add_action( 'admin_post_eln_test_mail', array( __CLASS__, 'handle_test_mail' ) );
-		add_action( 'admin_post_eln_reset_template', array( __CLASS__, 'handle_reset_template' ) );
 		add_action( 'admin_post_eln_reply_addlang', array( __CLASS__, 'handle_add_reply_lang' ) );
 		add_action( 'admin_post_eln_reply_dellang', array( __CLASS__, 'handle_delete_reply_lang' ) );
-		add_action( 'admin_post_eln_reply_reset', array( __CLASS__, 'handle_reply_reset' ) );
 		add_action( 'admin_enqueue_scripts', array( __CLASS__, 'enqueue_template_assets' ) );
 		// 询盘列表：查看弹窗（AJAX 取正文）与弹窗骨架
 		add_action( 'wp_ajax_eln_inquiry_detail', array( __CLASS__, 'ajax_inquiry_detail' ) );

@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-11-16T10:27:35+00:00\n"
+"POT-Creation-Date: 2026-11-16T13:40:02+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: email-log-notifications\n"
@@ -47,7 +47,7 @@ msgstr ""
 
 #: includes/class-eln-privacy.php:123
 #: includes/trait-eln-i18n.php:31
-#: includes/trait-eln-i18n.php:137
+#: includes/trait-eln-i18n.php:134
 msgid "Email"
 msgstr ""
 
@@ -73,7 +73,7 @@ msgstr ""
 
 #: includes/class-eln-privacy.php:129
 #: includes/trait-eln-i18n.php:33
-#: includes/trait-eln-i18n.php:133
+#: includes/trait-eln-i18n.php:130
 msgid "Attachments"
 msgstr ""
 
@@ -205,7 +205,7 @@ msgid "The email template is one HTML source you edit directly — the preview o
 msgstr ""
 
 #: includes/trait-eln-i18n.php:61
-#: includes/trait-eln-i18n.php:125
+#: includes/trait-eln-i18n.php:122
 msgid "Subject"
 msgstr ""
 
@@ -218,7 +218,7 @@ msgid "Email HTML source"
 msgstr ""
 
 #: includes/trait-eln-i18n.php:64
-msgid "This is the complete email body — the header text lives here too: look for the <!-- 表头标题 --> comment and edit that line. {{...}} tokens are filled with inquiry data. Clear it and save to restore the default."
+msgid "This is the complete email body — the header text lives here too: look for the <!-- 表头标题 --> comment and edit that line. {{...}} tokens are filled with inquiry data. What you save is what is used, blanks included."
 msgstr ""
 
 #: includes/trait-eln-i18n.php:67
@@ -299,229 +299,220 @@ msgid "Rendered live from the code on the left."
 msgstr ""
 
 #: includes/trait-eln-i18n.php:87
-#: includes/trait-eln-i18n.php:123
-msgid "Restore defaults"
-msgstr ""
-
-#: includes/trait-eln-i18n.php:88
-msgid "Email template restored to defaults."
-msgstr ""
-
-#: includes/trait-eln-i18n.php:89
 msgid "Send test email"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:90
+#: includes/trait-eln-i18n.php:88
 msgid "Renders the sample email and sends it to the inquiry inbox — never to a customer."
 msgstr ""
 
-#: includes/trait-eln-i18n.php:91
+#: includes/trait-eln-i18n.php:89
 msgid "Test email sent."
 msgstr ""
 
-#: includes/trait-eln-i18n.php:92
+#: includes/trait-eln-i18n.php:90
 msgid "Test email failed. Check WP Mail SMTP."
 msgstr ""
 
-#: includes/trait-eln-i18n.php:93
+#: includes/trait-eln-i18n.php:91
 msgid "Sample data"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:94
+#: includes/trait-eln-i18n.php:92
 msgid "Insert media"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:95
+#: includes/trait-eln-i18n.php:93
 msgid "Pick an image or video from the media library and insert it at the cursor."
 msgstr ""
 
-#: includes/trait-eln-i18n.php:96
+#: includes/trait-eln-i18n.php:94
 msgid "Format HTML"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:97
+#: includes/trait-eln-i18n.php:95
 msgid "Placeholders:"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:98
+#: includes/trait-eln-i18n.php:96
 msgid "Field labels"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:99
+#: includes/trait-eln-i18n.php:97
 msgid "Labels come from the form that submitted the inquiry. Anything set here overrides them; leave empty to fall back to the field name itself."
 msgstr ""
 
-#: includes/trait-eln-i18n.php:100
+#: includes/trait-eln-i18n.php:98
 msgid "No inquiry has reported any fields yet. The fields sent by the form will appear here automatically after the first inquiry."
 msgstr ""
 
-#: includes/trait-eln-i18n.php:101
+#: includes/trait-eln-i18n.php:99
 msgid "View"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:102
+#: includes/trait-eln-i18n.php:100
 msgid "Restore"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:103
-#: includes/trait-eln-i18n.php:118
+#: includes/trait-eln-i18n.php:101
+#: includes/trait-eln-i18n.php:116
 msgid "Delete"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:104
+#: includes/trait-eln-i18n.php:102
 msgid "Delete this inquiry and its attachments? This cannot be undone."
 msgstr ""
 
-#: includes/trait-eln-i18n.php:105
+#: includes/trait-eln-i18n.php:103
 msgid "Inquiry deleted."
 msgstr ""
 
-#: includes/trait-eln-i18n.php:106
+#: includes/trait-eln-i18n.php:104
 msgid "Invalid request."
 msgstr ""
 
-#: includes/trait-eln-i18n.php:107
+#: includes/trait-eln-i18n.php:105
 msgid "Inquiry not found."
 msgstr ""
 
-#: includes/trait-eln-i18n.php:108
+#: includes/trait-eln-i18n.php:106
 msgid "View Inquiry"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:109
+#: includes/trait-eln-i18n.php:107
 msgid "← All Inquiries"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:110
+#: includes/trait-eln-i18n.php:108
 msgid "Inquiry content"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:111
+#: includes/trait-eln-i18n.php:109
 msgid "Close"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:112
+#: includes/trait-eln-i18n.php:110
 msgid "Loading…"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:113
+#: includes/trait-eln-i18n.php:111
 msgid "Could not load this inquiry."
 msgstr ""
 
-#: includes/trait-eln-i18n.php:114
+#: includes/trait-eln-i18n.php:112
 msgid "Inquiry details"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:115
+#: includes/trait-eln-i18n.php:113
 msgid "Previous inquiry"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:116
+#: includes/trait-eln-i18n.php:114
 msgid "Next inquiry"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:117
+#: includes/trait-eln-i18n.php:115
 msgid "Email reply"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:119
+#: includes/trait-eln-i18n.php:117
 msgid "Reply template"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:120
+#: includes/trait-eln-i18n.php:118
 msgid "To"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:121
+#: includes/trait-eln-i18n.php:119
 msgid "Cc"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:122
+#: includes/trait-eln-i18n.php:120
 msgid "Bcc"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:124
+#: includes/trait-eln-i18n.php:121
 msgid "Fills the subject and body of the mailto link behind the viewer's email reply button."
 msgstr ""
 
-#: includes/trait-eln-i18n.php:126
+#: includes/trait-eln-i18n.php:123
 msgid "Body"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:127
-msgid "Placeholders (usable in every field): {{name}} name, {{email}} email, {{no}} inquiry no., {{date}} submitted time, {{source}} source. Multiple addresses are comma-separated. What you save is what is used - blanks included; \"Restore defaults\" brings the built-in template back."
+#: includes/trait-eln-i18n.php:124
+msgid "Placeholders (usable in every field): {{name}} name, {{email}} email, {{no}} inquiry no., {{date}} submitted time, {{source}} source. Multiple addresses are comma-separated. What you save is what is used, blanks included."
 msgstr ""
 
-#: includes/trait-eln-i18n.php:128
+#: includes/trait-eln-i18n.php:125
 msgid "Submitted"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:129
+#: includes/trait-eln-i18n.php:126
 msgid "Page form"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:130
+#: includes/trait-eln-i18n.php:127
 msgid "Popup form"
 msgstr ""
 
 #. translators: Placeholders must be preserved.
-#: includes/trait-eln-i18n.php:132
+#: includes/trait-eln-i18n.php:129
 #, php-format
 msgid "New inquiry from %s"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:134
+#: includes/trait-eln-i18n.php:131
 msgid "Inquiries are read-only. Open them from the Inquiries list."
 msgstr ""
 
-#: includes/trait-eln-i18n.php:135
+#: includes/trait-eln-i18n.php:132
 msgid "We received your inquiry"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:136
+#: includes/trait-eln-i18n.php:133
 msgid "Full Name"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:138
+#: includes/trait-eln-i18n.php:135
 msgid "Message"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:139
+#: includes/trait-eln-i18n.php:136
 msgid "Application"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:140
+#: includes/trait-eln-i18n.php:137
 msgid "Quantity"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:141
+#: includes/trait-eln-i18n.php:138
 msgid "Material"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:142
+#: includes/trait-eln-i18n.php:139
 msgid "Finish"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:143
+#: includes/trait-eln-i18n.php:140
 msgid "Connections"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:144
+#: includes/trait-eln-i18n.php:141
 msgid "Outer Diameter"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:145
+#: includes/trait-eln-i18n.php:142
 msgid "Inner Diameter"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:146
+#: includes/trait-eln-i18n.php:143
 msgid "Length"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:147
+#: includes/trait-eln-i18n.php:144
 msgid "Supporting Weight"
 msgstr ""
 
-#: includes/trait-eln-i18n.php:148
+#: includes/trait-eln-i18n.php:145
 msgid "Supporting Direction"
 msgstr ""

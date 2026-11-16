@@ -80,11 +80,11 @@
 
 /* ---------------------------------------------------------------- 列表列宽 */
 /* 列表列宽：来源是「英文标题（表单类型）」，默认宽度会折成两行 */
-.fixed .column-inquiry_no{width:150px;}
-.fixed .column-inquiry_email{width:180px;overflow-wrap:anywhere;}
-.fixed .column-inquiry_source{width:20%;}
-.fixed .column-inquiry_attachments{width:13%;}
-.fixed .column-inquiry_mail{width:170px;}
+.fixed .column-eln_inquiry_no{width:150px;}
+.fixed .column-eln_inquiry_email{width:180px;overflow-wrap:anywhere;}
+.fixed .column-eln_inquiry_source{width:20%;}
+.fixed .column-eln_inquiry_attachments{width:13%;}
+.fixed .column-eln_inquiry_mail{width:170px;}
 .eln-mail-status{display:inline-block;}
 .eln-mail-item{display:block;font-size:12px;line-height:1.9;color:#50575e;white-space:nowrap;}
 .eln-mail-dot{display:inline-block;width:9px;height:9px;margin-right:6px;border-radius:50%;vertical-align:-1px;}

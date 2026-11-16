@@ -250,7 +250,7 @@ trait ELN_Template_Trait {
         <!-- 页头第一行：编号 + 标题，改文案就在这里 -->
         <div style="font-size:22px;line-height:1.3;color:#ffffff;font-weight:600;">网站询盘#{{no}}</div>
         <!-- 页头第二行：来源 + 表单类型 + 提交时间 -->
-        <div style="margin-top:8px;font-size:12px;line-height:1.7;color:rgba(255,255,255,.85);">来源：{{source}}（{{form_type}}）　{{time}}</div>
+        <div style="margin-top:8px;font-size:12px;line-height:1.7;color:#d9eff0;">来源：{{source}}（{{form_type}}）　{{time}}</div>
       </td>
     </tr>
     <tr>
@@ -290,7 +290,7 @@ HTML;
       <td style="padding:28px 40px;background:#04979e;">
         <!-- 页头：标题 + 编号，改文案就在这里 -->
         <div style="font-size:22px;line-height:1.3;color:#ffffff;font-weight:600;">We've received your inquiry</div>
-        <div style="margin-top:8px;font-size:12px;line-height:1.7;color:rgba(255,255,255,.85);">#{{no}}　{{time}}</div>
+        <div style="margin-top:8px;font-size:12px;line-height:1.7;color:#d9eff0;">#{{no}}　{{time}}</div>
       </td>
     </tr>
     <tr>

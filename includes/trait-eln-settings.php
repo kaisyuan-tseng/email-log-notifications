@@ -89,24 +89,6 @@ trait ELN_Settings_Trait {
 		);
 	}
 
-	/** 回复模板「恢复默认」：直接删 option，回到内置默认 */
-	public static function handle_reply_reset(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( esc_html( self::t( 'invalid_request' ) ) );
-		}
-		check_admin_referer( 'eln_reply_reset' );
-		delete_option( self::OPT_REPLY );
-		wp_safe_redirect(
-			add_query_arg(
-				array(
-					'kind'            => 'reply',
-					'eln_reply_reset' => 1,
-				),
-				admin_url( 'edit.php?post_type=' . self::POST_TYPE . '&page=' . self::TPL_SLUG )
-			)
-		);
-	}
-
 	/** 「询盘通知」保存时的清洗 */
 	public static function sanitize_template( $input ): array {
 		return self::sanitize_template_of( $input, 'notify' );
@@ -196,7 +178,9 @@ trait ELN_Settings_Trait {
 	/**
 	 * 自定义模板的清洗：只去掉脚本类标签与事件属性，**保留内联样式和 {{占位符}}**。
 	 *
-	 * 用 wp_kses 白名单替代正则；通过 safecss_filter_attr_allow_css 放行 {{token}} 占位符。
+	 * 用 wp_kses 白名单替代正则；通过 safecss_filter_attr_allow_css 放行 {{token}} 与颜色函数。
+	 * 核心 safecss_filter_attr() 会把 rgba()/rgb()/hsl() 里的括号判为不安全并剥掉，
+	 * 导致预览里页头浅色字继承成黑字，这里对该字段定向放行。
 	 * 该字段仅 manage_options 可写，产物是邮件正文、不在站点前台渲染。
 	 */
 	private static function sanitize_template_html( string $html ): string {
@@ -206,7 +190,13 @@ trait ELN_Settings_Trait {
 		}
 
 		$allow_tokens = static function ( $allow_css, $css_test_string ) {
-			if ( is_string( $css_test_string ) && strpos( $css_test_string, '{{' ) !== false ) {
+			if ( ! is_string( $css_test_string ) ) {
+				return $allow_css;
+			}
+			if ( strpos( $css_test_string, '{{' ) !== false ) {
+				return true;
+			}
+			if ( preg_match( '/\b(?:rgba?|hsla?)\s*\(/i', $css_test_string ) ) {
 				return true;
 			}
 			return $allow_css;

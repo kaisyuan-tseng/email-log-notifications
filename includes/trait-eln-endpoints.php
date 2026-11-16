@@ -97,54 +97,6 @@ trait ELN_Endpoints_Trait {
 		exit;
 	}
 
-	/**
-	 * 恢复默认。
-	 *   通知：删 option（回到默认源码）
-	 *   自动确认：只清空**当前语言组**的三项内容，保留语言分组与开关
-	 *            （整体删 option 会连 enabled 一起丢掉，等于悄悄关掉功能）
-	 */
-	public static function handle_reset_template(): void {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_die( 'Insufficient permissions.', '', array( 'response' => 403 ) );
-		}
-		$kind = self::current_kind();
-		check_admin_referer( 'eln_reset_template_' . $kind );
-
-		$slot = 0;
-		if ( $kind === 'autoreply' ) {
-			$cfg                        = self::tpl( 'autoreply' );
-			$groups                     = self::reply_groups( $cfg );
-			$slot                       = self::current_slot( $groups );
-			$groups[ $slot ]['subject'] = '';
-			// 恢复默认 = 写回默认源码（不是清空：清空现在代表「就是要空正文」）
-			$groups[ $slot ]['html']   = self::default_template_html( 'autoreply' );
-			$groups[ $slot ]['labels'] = array();
-			update_option(
-				self::OPT_AUTOREPLY,
-				array(
-					'enabled' => empty( $cfg['enabled'] ) ? '0' : '1',
-					'groups'  => $groups,
-				),
-				false
-			);
-		} else {
-			delete_option( self::OPT_TEMPLATE );
-		}
-
-		wp_safe_redirect(
-			add_query_arg(
-				array(
-					'page'      => self::TPL_SLUG,
-					'kind'      => $kind,
-					'slot'      => $slot,
-					'eln_reset' => '1',
-				),
-				admin_url( 'edit.php?post_type=' . self::POST_TYPE )
-			)
-		);
-		exit;
-	}
-
 	/** 自动确认：新增一个语言组（语言代码来自页面顶部的小表单） */
 	public static function handle_add_reply_lang(): void {
 		if ( ! current_user_can( 'manage_options' ) ) {

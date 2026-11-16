@@ -34,14 +34,10 @@ trait ELN_Settings_Render_Trait {
 		if ( $is_auto ) {
 			$base_args['slot'] = $slot;
 		}
-		// 测试发信 / 恢复默认都带上 kind（与 slot），nonce 也按 kind 分，免得在 A 标签页误伤 B 的配置
+		// 测试发信带上 kind（与 slot），nonce 也按 kind 分，免得在 A 标签页误伤 B 的配置
 		$test  = wp_nonce_url(
 			add_query_arg( $base_args, admin_url( 'admin-post.php?action=eln_test_mail' ) ),
 			'eln_test_mail_' . $kind
-		);
-		$reset = wp_nonce_url(
-			add_query_arg( $base_args, admin_url( 'admin-post.php?action=eln_reset_template' ) ),
-			'eln_reset_template_' . $kind
 		);
 		$name  = self::option_name( $kind );
 		$group = $is_auto ? 'eln_autoreply_group' : 'eln_template_group';
@@ -52,10 +48,6 @@ trait ELN_Settings_Render_Trait {
 			$ok     = $_GET['eln_test'] === '1';
 			$notice = '<div class="notice ' . ( $ok ? 'notice-success' : 'notice-error' ) . ' is-dismissible"><p>'
 					. esc_html( self::t( $ok ? 'tpl_test_ok' : 'tpl_test_fail' ) ) . '</p></div>';
-		} elseif ( isset( $_GET['eln_reset'] ) ) {
-			$notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html( self::t( 'tpl_reset_done' ) ) . '</p></div>';
-		} elseif ( isset( $_GET['eln_reply_reset'] ) ) {
-			$notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html( self::t( 'tpl_reset_done' ) ) . '</p></div>';
 		} elseif ( isset( $_GET['eln_lang_added'] ) ) {
 			$notice = '<div class="notice notice-success is-dismissible"><p>' . esc_html( self::t( 'tpl_lang_added' ) ) . '</p></div>';
 		} elseif ( isset( $_GET['eln_lang_deleted'] ) ) {
@@ -129,20 +121,11 @@ trait ELN_Settings_Render_Trait {
 			<p class="eln-tpl-lede"><?php echo esc_html( self::t( 'tpl_intro' ) ); ?></p>
 
 			<?php if ( $kind === 'reply' ) : ?>
-				<?php
-				// 「邮件回复」标签：mailto 的 to/cc/bcc/主题/正文骨架；保存空白就是空白，「恢复默认」才回内置模板
-				$reply_reset = wp_nonce_url( admin_url( 'admin-post.php?action=eln_reply_reset' ), 'eln_reply_reset' );
-				?>
 				<div class="eln-tpl-card">
 					<div class="eln-tpl-card__head">
 						<div>
 							<h2><?php echo esc_html( self::t( 'reply_menu' ) ); ?></h2>
 							<p class="description"><?php echo esc_html( self::t( 'reply_card_hint' ) ); ?></p>
-						</div>
-						<div class="eln-tpl-card__actions">
-							<a class="button" href="<?php echo esc_url( $reply_reset ); ?>"
-								title="<?php echo esc_attr( self::t( 'reply_reset' ) ); ?>"
-								onclick="return confirm('<?php echo esc_js( self::t( 'reply_reset' ) ); ?>?');"><?php echo esc_html( self::t( 'reply_reset' ) ); ?></a>
 						</div>
 					</div>
 					<form method="post" action="options.php" class="eln-tpl-card__body">
@@ -191,9 +174,6 @@ trait ELN_Settings_Render_Trait {
 						<div class="eln-tpl-card__actions">
 							<a class="button" href="<?php echo esc_url( $test ); ?>"
 								title="<?php echo esc_attr( self::t( 'tpl_test_hint' ) ); ?>"><?php echo esc_html( self::t( 'tpl_test' ) ); ?></a>
-							<a class="button" href="<?php echo esc_url( $reset ); ?>"
-								title="<?php echo esc_attr( self::t( 'tpl_reset' ) ); ?>"
-								onclick="return confirm('<?php echo esc_js( self::t( 'tpl_reset' ) ); ?>?');"><?php echo esc_html( self::t( 'tpl_reset' ) ); ?></a>
 						</div>
 					</div>
 
@@ -367,6 +347,7 @@ trait ELN_Settings_Render_Trait {
 						</div>
 						<textarea name="<?php echo esc_attr( $name ); ?>[html]" id="eln-html" rows="22" class="large-text code"><?php echo esc_textarea( $code ); ?></textarea>
 						<p class="description"><?php echo esc_html( self::t( 'tpl_html_hint' ) ); ?></p>
+
 						<p class="eln-tpl-save"><?php submit_button( null, 'primary', 'submit', false ); ?></p>
 					</form>
 				</div>

@@ -171,6 +171,11 @@ trait ELN_CPT_Trait {
 		if ( $value === '' ) {
 			return;
 		}
+		// 搜索时不再叠加来源的精确 meta 过滤：来源下拉与搜索框在同一个 GET 表单里，
+		// 选过来源后搜索会被悄悄收窄，看起来像搜索坏了。
+		if ( $query->get( 's' ) !== '' ) {
+			return;
+		}
 		$query->set(
 			'meta_query',
 			array(

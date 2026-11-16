@@ -16,13 +16,11 @@ final class ELN_Compat {
 	 */
 	public static function register_legacy_hooks() {
 		$legacy = array(
-			'admin_post_inquiry_delete'         => 'handle_delete',
-			'admin_post_inquiry_test_mail'      => 'handle_test_mail',
-			'admin_post_inquiry_reset_template' => 'handle_reset_template',
-			'admin_post_inquiry_reply_addlang'  => 'handle_add_reply_lang',
-			'admin_post_inquiry_reply_dellang'  => 'handle_delete_reply_lang',
-			'admin_post_inquiry_reply_reset'    => 'handle_reply_reset',
-			'wp_ajax_inquiry_preview'           => 'ajax_preview',
+			'admin_post_inquiry_delete'        => 'handle_delete',
+			'admin_post_inquiry_test_mail'     => 'handle_test_mail',
+			'admin_post_inquiry_reply_addlang' => 'handle_add_reply_lang',
+			'admin_post_inquiry_reply_dellang' => 'handle_delete_reply_lang',
+			'wp_ajax_inquiry_preview'          => 'ajax_preview',
 		);
 
 		foreach ( $legacy as $hook => $method ) {

@@ -3,7 +3,7 @@ msgstr ""
 "Project-Id-Version: Email Log & Notifications 2.0.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/email-log-"
 "notifications\n"
-"POT-Creation-Date: 2026-11-16T10:27:35+00:00\n"
+"POT-Creation-Date: 2026-11-16T13:40:02+00:00\n"
 "PO-Revision-Date: 2026-11-16 00:00+0800\n"
 "Last-Translator: kaisyuan-tseng\n"
 "Language-Team: \n"
@@ -53,7 +53,7 @@ msgid "Inquiries"
 msgstr "询盘"
 
 #: includes/class-eln-privacy.php:123 includes/trait-eln-i18n.php:31
-#: includes/trait-eln-i18n.php:137
+#: includes/trait-eln-i18n.php:134
 msgid "Email"
 msgstr "邮箱"
 
@@ -74,12 +74,11 @@ msgid "Timezone"
 msgstr ""
 
 #: includes/class-eln-privacy.php:128
-#, fuzzy
 msgid "Source page"
 msgstr "来源"
 
 #: includes/class-eln-privacy.php:129 includes/trait-eln-i18n.php:33
-#: includes/trait-eln-i18n.php:133
+#: includes/trait-eln-i18n.php:130
 msgid "Attachments"
 msgstr "附件"
 
@@ -209,7 +208,7 @@ msgid ""
 "right renders this exact code."
 msgstr "邮件模板就是可直接编辑的 HTML 源码，右侧预览按它实时渲染。"
 
-#: includes/trait-eln-i18n.php:61 includes/trait-eln-i18n.php:125
+#: includes/trait-eln-i18n.php:61 includes/trait-eln-i18n.php:122
 msgid "Subject"
 msgstr "邮件主题"
 
@@ -227,10 +226,8 @@ msgstr "邮件模板源码（HTML）"
 msgid ""
 "This is the complete email body — the header text lives here too: look for "
 "the <!-- 表头标题 --> comment and edit that line. {{...}} tokens are filled "
-"with inquiry data. Clear it and save to restore the default."
-msgstr ""
-"这里就是邮件正文的完整源码；表头也在这里改——找到 <!-- 表头标题 --> 注释，直接"
-"改那一行文字。{{...}} 由询盘数据注入。清空并保存 = 恢复默认模板。"
+"with inquiry data. What you save is what is used, blanks included."
+msgstr "这里就是邮件正文的完整源码；表头也在这里改——找到 <!-- 表头标题 --> 注释，直接改那一行文字。{{...}} 由询盘数据注入。保存即所见，留空也是空白。"
 
 #: includes/trait-eln-i18n.php:67
 msgid "Enable auto-confirmation"
@@ -324,246 +321,249 @@ msgstr "预览"
 msgid "Rendered live from the code on the left."
 msgstr "按左侧代码实时渲染。"
 
-#: includes/trait-eln-i18n.php:87 includes/trait-eln-i18n.php:123
-msgid "Restore defaults"
-msgstr "恢复默认"
-
-#: includes/trait-eln-i18n.php:88
-msgid "Email template restored to defaults."
-msgstr "邮件模板已恢复默认。"
-
-#: includes/trait-eln-i18n.php:89
+#: includes/trait-eln-i18n.php:87
 msgid "Send test email"
 msgstr "发送测试邮件"
 
-#: includes/trait-eln-i18n.php:90
+#: includes/trait-eln-i18n.php:88
 msgid ""
 "Renders the sample email and sends it to the inquiry inbox — never to a "
 "customer."
 msgstr "按当前模板渲染一封示例邮件，发到询盘收件人邮箱，不会发给客户。"
 
-#: includes/trait-eln-i18n.php:91
+#: includes/trait-eln-i18n.php:89
 msgid "Test email sent."
 msgstr "测试邮件已发送。"
 
-#: includes/trait-eln-i18n.php:92
+#: includes/trait-eln-i18n.php:90
 msgid "Test email failed. Check WP Mail SMTP."
 msgstr "测试邮件发送失败，请检查 WP Mail SMTP。"
 
-#: includes/trait-eln-i18n.php:93
+#: includes/trait-eln-i18n.php:91
 msgid "Sample data"
 msgstr "示例数据"
 
-#: includes/trait-eln-i18n.php:94
+#: includes/trait-eln-i18n.php:92
 msgid "Insert media"
 msgstr "插入媒体"
 
-#: includes/trait-eln-i18n.php:95
+#: includes/trait-eln-i18n.php:93
 msgid ""
 "Pick an image or video from the media library and insert it at the cursor."
 msgstr "从媒体库选图片或视频，插入到光标处。"
 
-#: includes/trait-eln-i18n.php:96
+#: includes/trait-eln-i18n.php:94
 msgid "Format HTML"
 msgstr "格式化 HTML"
 
-#: includes/trait-eln-i18n.php:97
+#: includes/trait-eln-i18n.php:95
 msgid "Placeholders:"
 msgstr "占位符："
 
-#: includes/trait-eln-i18n.php:98
+#: includes/trait-eln-i18n.php:96
 msgid "Field labels"
 msgstr "字段标签"
 
-#: includes/trait-eln-i18n.php:99
+#: includes/trait-eln-i18n.php:97
 msgid ""
 "Labels come from the form that submitted the inquiry. Anything set here "
 "overrides them; leave empty to fall back to the field name itself."
 msgstr ""
 "默认用前端表单提交的字段标签；这里填了会覆盖它，留空则回退到字段名本身。"
 
-#: includes/trait-eln-i18n.php:100
+#: includes/trait-eln-i18n.php:98
 msgid ""
 "No inquiry has reported any fields yet. The fields sent by the form will "
 "appear here automatically after the first inquiry."
 msgstr ""
 "还没有询盘提交过字段。收到第一封询盘后，表单提交的字段会自动出现在这里。"
 
-#: includes/trait-eln-i18n.php:101
+#: includes/trait-eln-i18n.php:99
 msgid "View"
 msgstr "查看"
 
-#: includes/trait-eln-i18n.php:102
+#: includes/trait-eln-i18n.php:100
 msgid "Restore"
 msgstr "恢复"
 
-#: includes/trait-eln-i18n.php:103 includes/trait-eln-i18n.php:118
+#: includes/trait-eln-i18n.php:101 includes/trait-eln-i18n.php:116
 msgid "Delete"
 msgstr "删除"
 
-#: includes/trait-eln-i18n.php:104
+#: includes/trait-eln-i18n.php:102
 msgid "Delete this inquiry and its attachments? This cannot be undone."
 msgstr "确定删除这条询盘及其附件？此操作不可恢复。"
 
-#: includes/trait-eln-i18n.php:105
+#: includes/trait-eln-i18n.php:103
 msgid "Inquiry deleted."
 msgstr "询盘已删除。"
 
-#: includes/trait-eln-i18n.php:106
+#: includes/trait-eln-i18n.php:104
 msgid "Invalid request."
 msgstr "请求无效。"
 
-#: includes/trait-eln-i18n.php:107
+#: includes/trait-eln-i18n.php:105
 msgid "Inquiry not found."
 msgstr "询盘不存在。"
 
-#: includes/trait-eln-i18n.php:108
+#: includes/trait-eln-i18n.php:106
 msgid "View Inquiry"
 msgstr "查看询盘"
 
-#: includes/trait-eln-i18n.php:109
+#: includes/trait-eln-i18n.php:107
 msgid "← All Inquiries"
 msgstr "← 返回所有询盘"
 
-#: includes/trait-eln-i18n.php:110
+#: includes/trait-eln-i18n.php:108
 msgid "Inquiry content"
 msgstr "询盘内容"
 
-#: includes/trait-eln-i18n.php:111
+#: includes/trait-eln-i18n.php:109
 msgid "Close"
 msgstr "关闭"
 
-#: includes/trait-eln-i18n.php:112
+#: includes/trait-eln-i18n.php:110
 msgid "Loading…"
 msgstr "加载中…"
 
-#: includes/trait-eln-i18n.php:113
+#: includes/trait-eln-i18n.php:111
 msgid "Could not load this inquiry."
 msgstr "加载失败，请重试。"
 
-#: includes/trait-eln-i18n.php:114
+#: includes/trait-eln-i18n.php:112
 msgid "Inquiry details"
 msgstr "询盘内容"
 
-#: includes/trait-eln-i18n.php:115
+#: includes/trait-eln-i18n.php:113
 msgid "Previous inquiry"
 msgstr "上一条询盘"
 
-#: includes/trait-eln-i18n.php:116
+#: includes/trait-eln-i18n.php:114
 msgid "Next inquiry"
 msgstr "下一条询盘"
 
-#: includes/trait-eln-i18n.php:117
+#: includes/trait-eln-i18n.php:115
 msgid "Email reply"
 msgstr "邮件回复"
 
-#: includes/trait-eln-i18n.php:119
+#: includes/trait-eln-i18n.php:117
 msgid "Reply template"
 msgstr "回复模板"
 
-#: includes/trait-eln-i18n.php:120
+#: includes/trait-eln-i18n.php:118
 msgid "To"
 msgstr "收件人"
 
-#: includes/trait-eln-i18n.php:121
+#: includes/trait-eln-i18n.php:119
 msgid "Cc"
 msgstr "抄送"
 
-#: includes/trait-eln-i18n.php:122
+#: includes/trait-eln-i18n.php:120
 msgid "Bcc"
 msgstr "密送"
 
-#: includes/trait-eln-i18n.php:124
+#: includes/trait-eln-i18n.php:121
 msgid ""
 "Fills the subject and body of the mailto link behind the viewer's email "
 "reply button."
 msgstr "询盘弹窗里「邮件回复」按钮的 mailto 主题与正文骨架。"
 
-#: includes/trait-eln-i18n.php:126
+#: includes/trait-eln-i18n.php:123
 msgid "Body"
 msgstr "邮件正文"
 
-#: includes/trait-eln-i18n.php:127
+#: includes/trait-eln-i18n.php:124
 msgid ""
 "Placeholders (usable in every field): {{name}} name, {{email}} email, {{no}} "
 "inquiry no., {{date}} submitted time, {{source}} source. Multiple addresses "
-"are comma-separated. What you save is what is used - blanks included; "
-"\"Restore defaults\" brings the built-in template back."
+"are comma-separated. What you save is what is used, blanks included."
 msgstr ""
 "占位符（所有字段通用）：{{name}} 姓名、{{email}} 邮箱、{{no}} 编号、{{date}} "
-"提交时间、{{source}} 来源。多个地址用英文逗号分隔。保存即所见——留空也是空白；"
-"「恢复默认」可回到内置模板。"
+"提交时间、{{source}} 来源。多个地址用英文逗号分隔。保存即所见，留空也是空白。"
 
-#: includes/trait-eln-i18n.php:128
+#: includes/trait-eln-i18n.php:125
 msgid "Submitted"
 msgstr "提交时间"
 
-#: includes/trait-eln-i18n.php:129
+#: includes/trait-eln-i18n.php:126
 msgid "Page form"
 msgstr "页面表单"
 
-#: includes/trait-eln-i18n.php:130
+#: includes/trait-eln-i18n.php:127
 msgid "Popup form"
 msgstr "弹窗表单"
 
 #. translators: Placeholders must be preserved.
-#: includes/trait-eln-i18n.php:132
+#: includes/trait-eln-i18n.php:129
 #, php-format
 msgid "New inquiry from %s"
 msgstr "收到新询盘：%s"
 
-#: includes/trait-eln-i18n.php:134
+#: includes/trait-eln-i18n.php:131
 msgid "Inquiries are read-only. Open them from the Inquiries list."
 msgstr "询盘为只读档案，请到后台「询盘」列表查看。"
 
-#: includes/trait-eln-i18n.php:135
+#: includes/trait-eln-i18n.php:132
 msgid "We received your inquiry"
 msgstr "已收到您的询盘"
 
-#: includes/trait-eln-i18n.php:136
+#: includes/trait-eln-i18n.php:133
 msgid "Full Name"
 msgstr "姓名"
 
-#: includes/trait-eln-i18n.php:138
+#: includes/trait-eln-i18n.php:135
 msgid "Message"
 msgstr "询盘内容"
 
-#: includes/trait-eln-i18n.php:139
+#: includes/trait-eln-i18n.php:136
 msgid "Application"
 msgstr "应用场景"
 
-#: includes/trait-eln-i18n.php:140
+#: includes/trait-eln-i18n.php:137
 msgid "Quantity"
 msgstr "数量"
 
-#: includes/trait-eln-i18n.php:141
+#: includes/trait-eln-i18n.php:138
 msgid "Material"
 msgstr "材质"
 
-#: includes/trait-eln-i18n.php:142
+#: includes/trait-eln-i18n.php:139
 msgid "Finish"
 msgstr "表面处理"
 
-#: includes/trait-eln-i18n.php:143
+#: includes/trait-eln-i18n.php:140
 msgid "Connections"
 msgstr "连接方式"
 
-#: includes/trait-eln-i18n.php:144
+#: includes/trait-eln-i18n.php:141
 msgid "Outer Diameter"
 msgstr "外径"
 
-#: includes/trait-eln-i18n.php:145
+#: includes/trait-eln-i18n.php:142
 msgid "Inner Diameter"
 msgstr "内径"
 
-#: includes/trait-eln-i18n.php:146
+#: includes/trait-eln-i18n.php:143
 msgid "Length"
 msgstr "长度"
 
-#: includes/trait-eln-i18n.php:147
+#: includes/trait-eln-i18n.php:144
 msgid "Supporting Weight"
 msgstr "承重"
 
-#: includes/trait-eln-i18n.php:148
+#: includes/trait-eln-i18n.php:145
 msgid "Supporting Direction"
 msgstr "出线方向"
+
+#~ msgid "Restore defaults"
+#~ msgstr "恢复默认"
+
+#~ msgid "Email template restored to defaults."
+#~ msgstr "邮件模板已恢复默认。"
+
+#~ msgid "Default template"
+#~ msgstr "默认模板"
+
+#~ msgid ""
+#~ "The “Restore defaults” button in this tab restores to the source below."
+#~ msgstr "本标签页的“恢复默认”按钮会恢复为下面的源码。"
