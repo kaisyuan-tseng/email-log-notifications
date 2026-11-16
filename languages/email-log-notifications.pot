@@ -1,0 +1,527 @@
+# Copyright (C) 2026 kaisyuan-tseng
+# This file is distributed under the GPL-2.0-or-later.
+msgid ""
+msgstr ""
+"Project-Id-Version: Email Log & Notifications 2.0.0\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/email-log-notifications\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2026-11-16T10:27:35+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.12.0\n"
+"X-Domain: email-log-notifications\n"
+
+#. Plugin Name of the plugin
+#: email-log-notifications.php
+#: includes/class-eln-privacy.php:38
+#: includes/class-eln-privacy.php:50
+msgid "Email Log & Notifications"
+msgstr ""
+
+#. Description of the plugin
+#: email-log-notifications.php
+msgid "A companion to your SMTP plugin: sends the email notifications (inquiry notifications to the sales inbox, auto-confirmations back to the visitor in their own language) and keeps a log of every send with its delivery result."
+msgstr ""
+
+#. Author of the plugin
+#: email-log-notifications.php
+msgid "kaisyuan-tseng"
+msgstr ""
+
+#. Author URI of the plugin
+#: email-log-notifications.php
+msgid "https://profiles.wordpress.org/kaisyuan-tseng/"
+msgstr ""
+
+#: includes/class-eln-privacy.php:28
+msgid "This plugin stores inquiry data submitted through the site contact form: name, email, message, form fields, browser language, timezone, IP address, source page, and any uploaded attachments. Records are visible only to authorized administrators and are used to send inquiry notifications and delivery confirmations. Use the WordPress privacy tools to export or erase records by email address; deleting an inquiry also removes its attachments."
+msgstr ""
+
+#: includes/class-eln-privacy.php:81
+#: includes/trait-eln-i18n.php:24
+msgid "Inquiries"
+msgstr ""
+
+#: includes/class-eln-privacy.php:123
+#: includes/trait-eln-i18n.php:31
+#: includes/trait-eln-i18n.php:137
+msgid "Email"
+msgstr ""
+
+#: includes/class-eln-privacy.php:124
+msgid "Form fields"
+msgstr ""
+
+#: includes/class-eln-privacy.php:125
+msgid "IP address"
+msgstr ""
+
+#: includes/class-eln-privacy.php:126
+msgid "Browser language"
+msgstr ""
+
+#: includes/class-eln-privacy.php:127
+msgid "Timezone"
+msgstr ""
+
+#: includes/class-eln-privacy.php:128
+msgid "Source page"
+msgstr ""
+
+#: includes/class-eln-privacy.php:129
+#: includes/trait-eln-i18n.php:33
+#: includes/trait-eln-i18n.php:133
+msgid "Attachments"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:25
+msgid "All Inquiries"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:26
+msgid "Search Inquiries"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:27
+#: includes/trait-eln-i18n.php:58
+msgid "No inquiries yet."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:28
+msgid "No inquiries in Trash."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:29
+msgid "No."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:30
+msgid "Contact"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:32
+msgid "Source"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:34
+msgid "Email status"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:35
+msgid "Not sent"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:36
+msgid "Partly sent"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:37
+msgid "All sent"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:38
+msgid "Neither the inquiry notification nor the auto-confirmation was sent"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:39
+msgid "Only the inquiry notification was sent"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:40
+msgid "Only the auto-confirmation was sent"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:41
+msgid "Both the inquiry notification and the auto-confirmation were sent"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:42
+msgid "Sent"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:43
+msgid "Failed"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:44
+#: includes/trait-eln-i18n.php:65
+msgid "Inquiry notification"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:45
+#: includes/trait-eln-i18n.php:66
+msgid "Auto-confirmation"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:46
+msgid "Trash"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:47
+msgid "All sources"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:48
+msgid "Email template"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:49
+msgid "Recent inquiries"
+msgstr ""
+
+#. translators: Placeholders must be preserved.
+#: includes/trait-eln-i18n.php:51
+#, php-format
+msgid "Today %s"
+msgstr ""
+
+#. translators: Placeholders must be preserved.
+#: includes/trait-eln-i18n.php:53
+#, php-format
+msgid "Yesterday %s"
+msgstr ""
+
+#. translators: Placeholders must be preserved.
+#: includes/trait-eln-i18n.php:55
+#, php-format
+msgid "%d today"
+msgstr ""
+
+#. translators: Placeholders must be preserved.
+#: includes/trait-eln-i18n.php:57
+#, php-format
+msgid "%d in total"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:59
+msgid "View all inquiries"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:60
+msgid "The email template is one HTML source you edit directly — the preview on the right renders this exact code."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:61
+#: includes/trait-eln-i18n.php:125
+msgid "Subject"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:62
+msgid "Tokens: {{name}} {{email}} — same braces as the body. Leave empty to use the default wording."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:63
+msgid "Email HTML source"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:64
+msgid "This is the complete email body — the header text lives here too: look for the <!-- 表头标题 --> comment and edit that line. {{...}} tokens are filled with inquiry data. Clear it and save to restore the default."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:67
+msgid "Enable auto-confirmation"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:68
+msgid "When on, the visitor immediately receives the auto-confirmation at the address they typed. Reply-To points at the inquiry inbox."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:69
+#: includes/trait-eln-i18n.php:71
+msgid "Language"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:70
+msgid "Default group"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:72
+msgid "Add language group"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:73
+msgid "Delete this language group"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:74
+msgid "Delete this language group and its template?"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:75
+msgid "Language group added."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:76
+msgid "Language group deleted."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:77
+msgid "That language group already exists."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:78
+msgid "Matched against the visitor’s browser language ({{lang}}): full tag first (zh-CN), then the primary language (zh). Anything unmatched uses the “Default group” — the one template with no language attached."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:79
+msgid "These labels only affect {{rows}} in this language group. Leave empty to use the wording the form itself submitted."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:80
+msgid "Used when the visitor’s browser language matches no language group"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:81
+msgid "Drag to reorder"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:82
+msgid "Drag the handle to reorder — the table rows in {{rows}} follow this order."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:83
+msgid "Values marked * come from the front end:"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:84
+msgid "Every row of {{rows}} also comes from the submitted form fields — new form fields show up here automatically."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:85
+msgid "Preview"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:86
+msgid "Rendered live from the code on the left."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:87
+#: includes/trait-eln-i18n.php:123
+msgid "Restore defaults"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:88
+msgid "Email template restored to defaults."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:89
+msgid "Send test email"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:90
+msgid "Renders the sample email and sends it to the inquiry inbox — never to a customer."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:91
+msgid "Test email sent."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:92
+msgid "Test email failed. Check WP Mail SMTP."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:93
+msgid "Sample data"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:94
+msgid "Insert media"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:95
+msgid "Pick an image or video from the media library and insert it at the cursor."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:96
+msgid "Format HTML"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:97
+msgid "Placeholders:"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:98
+msgid "Field labels"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:99
+msgid "Labels come from the form that submitted the inquiry. Anything set here overrides them; leave empty to fall back to the field name itself."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:100
+msgid "No inquiry has reported any fields yet. The fields sent by the form will appear here automatically after the first inquiry."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:101
+msgid "View"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:102
+msgid "Restore"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:103
+#: includes/trait-eln-i18n.php:118
+msgid "Delete"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:104
+msgid "Delete this inquiry and its attachments? This cannot be undone."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:105
+msgid "Inquiry deleted."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:106
+msgid "Invalid request."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:107
+msgid "Inquiry not found."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:108
+msgid "View Inquiry"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:109
+msgid "← All Inquiries"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:110
+msgid "Inquiry content"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:111
+msgid "Close"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:112
+msgid "Loading…"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:113
+msgid "Could not load this inquiry."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:114
+msgid "Inquiry details"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:115
+msgid "Previous inquiry"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:116
+msgid "Next inquiry"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:117
+msgid "Email reply"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:119
+msgid "Reply template"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:120
+msgid "To"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:121
+msgid "Cc"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:122
+msgid "Bcc"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:124
+msgid "Fills the subject and body of the mailto link behind the viewer's email reply button."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:126
+msgid "Body"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:127
+msgid "Placeholders (usable in every field): {{name}} name, {{email}} email, {{no}} inquiry no., {{date}} submitted time, {{source}} source. Multiple addresses are comma-separated. What you save is what is used - blanks included; \"Restore defaults\" brings the built-in template back."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:128
+msgid "Submitted"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:129
+msgid "Page form"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:130
+msgid "Popup form"
+msgstr ""
+
+#. translators: Placeholders must be preserved.
+#: includes/trait-eln-i18n.php:132
+#, php-format
+msgid "New inquiry from %s"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:134
+msgid "Inquiries are read-only. Open them from the Inquiries list."
+msgstr ""
+
+#: includes/trait-eln-i18n.php:135
+msgid "We received your inquiry"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:136
+msgid "Full Name"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:138
+msgid "Message"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:139
+msgid "Application"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:140
+msgid "Quantity"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:141
+msgid "Material"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:142
+msgid "Finish"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:143
+msgid "Connections"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:144
+msgid "Outer Diameter"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:145
+msgid "Inner Diameter"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:146
+msgid "Length"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:147
+msgid "Supporting Weight"
+msgstr ""
+
+#: includes/trait-eln-i18n.php:148
+msgid "Supporting Direction"
+msgstr ""

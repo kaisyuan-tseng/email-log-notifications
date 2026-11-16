@@ -1,0 +1,80 @@
+/* Email Log & Notifications — 邮件模板设置页样式（版本 2.0.0）
+ * 由 PHP 内联 <style> 原样外置，仅将 si-* 前缀统一为 eln-*。
+ */
+.eln-tpl-lede { margin: 6px 0 16px; color: #646970; }
+.eln-tpl-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 1280px) { .eln-tpl-grid { grid-template-columns: 1fr; } }
+
+/* 卡片外壳：头（标题 + 操作）/ 语言条 / 表单体 */
+.eln-tpl-card { background: #fff; border: 1px solid #dcdcde; }
+.eln-tpl-card__head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px 16px; padding: 14px 20px; border-bottom: 1px solid #f0f0f1; }
+.eln-tpl-card__head h2 { margin: 0; font-size: 15px; line-height: 1.5; }
+.eln-tpl-card__head .description { margin: 3px 0 0; }
+.eln-tpl-card__head > div:first-child { min-width: 0; }
+.eln-tpl-card__actions { display: flex; gap: 8px; flex: none; }
+.eln-tpl-card__body { padding: 20px 20px 24px; }
+
+/* 语言组 */
+.eln-lang-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 18px; background: #f6f7f7; border-bottom: 1px solid #f0f0f1; }
+.eln-lang-bar__label { font-size: 12px; font-weight: 600; color: #50575e; }
+.eln-lang-list { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.eln-lang-item { display: inline-flex; align-items: stretch; }
+.eln-lang-tab { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; background: #fff; border: 1px solid #c3c4c7; border-radius: 3px; color: #2271b1; font-size: 12px; text-decoration: none; }
+.eln-lang-tab:hover { border-color: #2271b1; color: #135e96; }
+.eln-lang-tab.is-active { background: #2271b1; border-color: #2271b1; color: #fff; }
+.eln-lang-item.has-del .eln-lang-tab { border-radius: 3px 0 0 3px; border-right: 0; }
+.eln-lang-del { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 26px; border: 1px solid #c3c4c7; border-radius: 0 3px 3px 0; background: #fff; color: #b32d2e; font-size: 15px; line-height: 1; text-decoration: none; }
+.eln-lang-del:hover { background: #fcf0f1; border-color: #b32d2e; color: #b32d2e; }
+.eln-lang-add { display: flex; align-items: center; gap: 6px; margin: 0 0 0 auto; }
+.eln-lang-hint { flex: 0 0 100%; margin: 0; font-size: 12px; color: #646970; }
+
+/* 表单 */
+.eln-tpl-row { display: flex; gap: 20px; flex-wrap: wrap; margin: 0 0 22px; }
+.eln-tpl-field { display: flex; flex-direction: column; gap: 8px; }
+.eln-tpl-field--grow { flex: 1 1 300px; }
+.eln-tpl-field label { font-weight: 600; }
+.eln-tpl-field .description { margin: 0; }
+.eln-tpl-field input[type=text], .eln-tpl-field textarea { margin: 0; }
+.eln-tpl-check { display: flex; align-items: center; gap: 8px; font-weight: 600; margin: 0 0 4px; }
+.eln-tpl-field--check { margin: 0 0 18px; }
+.eln-lang-code { flex: 0 0 220px; }
+
+/* 字段标签（可拖动） */
+.eln-tpl-details { border: 1px solid #e2e8ea; background: #fafafa; padding: 0 14px; margin: 0 0 18px; }
+.eln-tpl-details > summary { display: flex; align-items: center; gap: 8px; padding: 10px 0; font-weight: 600; cursor: pointer; list-style: none; }
+.eln-tpl-details > summary::-webkit-details-marker { display: none; }
+.eln-tpl-details > summary::before { content: "\25B8"; display: inline-block; width: 14px; color: #8a979d; font-size: 12px; line-height: 1; transition: transform .15s; }
+.eln-tpl-details[open] > summary::before { transform: rotate(90deg); }
+.eln-tpl-details > p { margin: 0 0 8px; }
+.eln-tpl-badge { margin-left: auto; min-width: 20px; padding: 0 6px; border-radius: 10px; background: #e2e8ea; color: #50575e; font-size: 11px; line-height: 20px; text-align: center; }
+.eln-tpl-labels { display: flex; flex-direction: column; gap: 6px; margin: 0 0 10px; }
+.eln-tpl-label-row { display: grid; grid-template-columns: 18px 150px minmax(0, 1fr); align-items: center; gap: 10px; padding: 5px 8px; background: #fff; border: 1px solid #e2e8ea; }
+.eln-tpl-label-row .eln-sort { cursor: grab; color: #8a979d; font-size: 13px; letter-spacing: -3px; user-select: none; }
+.eln-tpl-label-row .eln-sort:active { cursor: grabbing; }
+.eln-tpl-label-key { font-size: 11px; color: #646970; font-family: Consolas, Monaco, monospace; }
+.eln-tpl-labels .ui-sortable-placeholder { visibility: visible !important; height: 38px; border: 1px dashed #c3c4c7; background: #f6f7f7; }
+.eln-tpl-label-row.ui-sortable-helper { box-shadow: 0 3px 8px rgba(0,0,0,.12); border-color: #8a979d; }
+.eln-labels-hint { margin: 0 0 12px !important; }
+@media (max-width: 782px) { .eln-tpl-label-row { grid-template-columns: 18px minmax(0, 1fr); } .eln-tpl-label-key { grid-column: 2; } }
+
+/* 源码区 */
+.eln-tpl-section-title { margin: 0 0 8px; font-size: 14px; }
+.eln-tpl-toolbar { display: flex; flex-direction: column; gap: 8px; margin: 0 0 10px; padding: 10px 12px; background: #f6f7f7; border: 1px solid #e2e8ea; }
+.eln-tpl-toolbar__row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.eln-tpl-toolbar__row .description { margin: 0; }
+.eln-tpl-toolbar__label { color: #646970; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.eln-tpl-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.eln-tpl-chips .button { margin: 0; }
+.eln-tpl-chips__sep { width: 1px; height: 16px; margin: 0 3px; background: #dcdcde; }
+.eln-tpl-chip { font-family: Consolas, Monaco, monospace; font-size: 11px; }
+.eln-tpl-legend { margin: 0; font-size: 12px; color: #646970; }
+.eln-tpl-legend code { font-size: 11px; }
+.eln-req { color: #d63638; margin-left: 1px; }
+.CodeMirror { height: 560px; border: 1px solid #dcdcde; }
+.eln-tpl-save { margin: 18px 0 0; }
+
+/* 预览 */
+.eln-tpl-preview { position: sticky; top: 32px; }
+.eln-preview-body { padding: 12px; background: #f6f7f7; }
+#eln-preview { display: block; width: 100%; height: 760px; border: 0; background: #fff; }
+.eln-preview-note { margin: 10px 0 0; padding: 0 18px 14px; color: #646970; font-size: 12px; }

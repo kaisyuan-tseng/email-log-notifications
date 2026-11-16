@@ -1,0 +1,17 @@
+.git
+.gitignore
+.github
+.distignore
+INTEGRATION.md
+*.log
+composer.json
+composer.lock
+phpcs.xml.dist
+vendor
+node_modules
+tests
+build
+*.zip
+*.tar.gz
+split_tmp.py
+header_tmp.py

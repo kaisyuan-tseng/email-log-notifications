@@ -1,0 +1,93 @@
+/* Email Log & Notifications — 后台共享样式（版本 2.0.0）
+ * 询盘列表弹窗 / 仪表盘「最近询盘」挂件 / 询盘列表列宽共用此文件。
+ */
+
+/* ---------------------------------------------------------------- 列表弹窗 */
+/* 结构照搬 WP「外观 → 主题详情」，遮罩同 .theme-backdrop：浅灰 90%、不盖左侧菜单和管理栏 */
+.eln-modal{position:fixed;top:32px;left:160px;right:0;bottom:0;z-index:9980;display:none;align-items:center;justify-content:center;padding:40px;background:rgba(240,240,241,.9);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;font-size:13px;line-height:1.5;color:#1d2327;}
+.eln-modal.is-open{display:flex;}
+.eln-modal__panel{position:relative;width:min(1080px,100%);height:min(720px,100%);display:flex;flex-direction:column;background:#fff;box-shadow:0 1px 20px 5px rgba(0,0,0,.1);}
+.eln-modal__top{position:relative;flex:none;height:48px;border-bottom:1px solid #dcdcde;}
+.eln-modal__nav{display:flex;}
+.eln-modal__arrow{display:inline-flex;align-items:center;justify-content:center;width:54px;height:48px;border:0;border-right:1px solid #dcdcde;background:transparent;color:#3c434a;cursor:pointer;vertical-align:top;}
+.eln-modal__arrow svg{display:block;fill:none;stroke:#3c434a;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;}
+.eln-modal__arrow:hover:not(:disabled){background:#f0f0f1;color:#1d2327;}
+.eln-modal__arrow:hover:not(:disabled) svg{stroke:#1d2327;}
+.eln-modal__arrow:disabled{color:#c3c4c7;cursor:default;}
+.eln-modal__arrow:disabled svg{stroke:#c3c4c7;}
+.eln-modal__top .eln-modal__close{position:absolute;top:0;right:0;display:inline-flex;align-items:center;justify-content:center;width:50px;height:48px;border:0;border-left:1px solid #dcdcde;background:transparent;color:#3c434a;cursor:pointer;font-size:20px;line-height:1;}
+.eln-modal__top .eln-modal__close:hover{background:#f0f0f1;color:#1d2327;}
+.eln-modal__wrap{display:flex;flex:1;min-height:0;}
+.eln-modal__main{flex:1;min-width:0;overflow:auto;padding:28px 32px 40px;background:#fff;}
+.eln-modal__stage{max-width:720px;margin:0 auto;border:1px solid #dcdcde;background:#fff;box-shadow:0 1px 8px rgba(0,0,0,.07);}
+.eln-modal__stage>*{display:block;padding:28px 32px;}
+/* 邮件表格自适应信纸框：模板已改 width:100%;max-width:640px，
+   存量记录里 640px 硬编码的表格在这里强制收缩（!important 压过行内样式） */
+.eln-modal__stage img{max-width:100%;height:auto;}
+.eln-modal__stage table{max-width:100%;}
+.eln-modal__stage table[width="640"],
+.eln-modal__stage table[style*="640px"]{width:100% !important;max-width:100% !important;}
+.eln-modal__loading{text-align:center;color:#646970;padding:64px 0;border:0;box-shadow:none;}
+.eln-modal__side{flex:none;width:30%;min-width:280px;max-width:440px;overflow:auto;padding:20px 25px;background:#fff;}
+.eln-modal__chip{display:inline-block;padding:1px 8px;border-radius:3px;font-size:12px;line-height:1.7;}
+.eln-modal__chip.is-all{background:#edfaef;color:#00a32a;}
+.eln-modal__chip.is-partial{background:#fcf9e8;color:#996800;}
+.eln-modal__chip.is-none{background:#f0f0f1;color:#787c82;}
+.eln-modal__title{margin:0 0 4px;font-size:21px;font-weight:400;line-height:1.4;}
+.eln-modal__no{margin:0 0 14px;color:#646970;font-size:12px;}
+.eln-modal__fields{margin:0;}
+.eln-modal__fields dt{margin:16px 0 3px;color:#646970;font-size:12px;}
+.eln-modal__fields dt:first-of-type{margin-top:0;}
+.eln-modal__fields dd{margin:0;font-size:13px;word-break:break-word;}
+.eln-modal__fields dd .eln-mail-item{display:block;}
+.eln-modal__foot{flex:none;height:53px;display:flex;justify-content:center;align-items:center;gap:8px;padding:10px 25px 5px;background:#f6f7f7;border-top:1px solid #f0f0f1;}
+/* 删除：与核心 .delete-theme 一致——默认红字透底，hover 红底白字红边 */
+.eln-modal__delete{color:#b32d2e !important;border:1px solid transparent !important;background:transparent !important;}
+.eln-modal__delete:hover{background:#b32d2e !important;border-color:#b32d2e !important;color:#fff !important;}
+/* 只有真正收起（.folded）才贴 36px；auto-fold 只是「窗口变窄自动折叠」的标记，
+   菜单此时可能还是展开的 160px，跟着缩会盖住菜单 */
+.folded .eln-modal{left:36px;}
+/* 窄屏：遮罩铺满、面板全屏 */
+@media (max-width:782px){
+    .eln-modal{left:0;top:0;padding:0;}
+    .eln-modal__panel{width:100%;height:100%;}
+    .eln-modal__wrap{flex-direction:column;overflow:auto;}
+    .eln-modal__main{overflow:visible;padding:16px 16px 24px;}
+    .eln-modal__side{width:auto;max-width:none;border-left:0;border-top:1px solid #dcdcde;}
+}
+
+/* ---------------------------------------------------------------- 仪表盘挂件 */
+/* 参照核心「活动 → 最近发布」：左边固定日期列 + 斑马纹 + 列表出血到挂件边缘；
+   末列是发信状态：询盘通知 / 自动确认各一行，圆点 + 文字，口径与列表页一致 */
+.si-dash { margin: 0 -12px; }
+.si-dash__meta { margin: 0 0 8px; padding: 0 12px; color: #646970; font-size: 12px; }
+.si-dash__list { margin: 0; padding: 0; list-style: none; }
+.si-dash__item { display: grid; grid-template-columns: clamp(112px, calc(2vw + 88px), 150px) minmax(0, 1fr) auto; column-gap: 10px; align-items: baseline; padding: 5px 12px; color: #646970; }
+.si-dash__item:nth-child(odd) { background-color: #f6f7f7; }
+.si-dash__date { font-variant-numeric: tabular-nums; }
+.si-dash__main { min-width: 0; }
+.si-dash__name { text-decoration: none; }
+.si-dash__sub { display: block; overflow: hidden; color: #646970; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.si-dash__mail { display: flex; flex-direction: column; gap: 1px; align-self: center; }
+.si-dash__status { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 1.6; color: #50575e; white-space: nowrap; }
+.si-dash__dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.si-dash__dot.is-ok { background: #00a32a; }
+.si-dash__dot.is-fail { background: #d63638; }
+.si-dash__dot.is-none { box-shadow: inset 0 0 0 1.5px #c3c4c7; }
+.si-dash__empty { margin: 4px 0 0; padding: 0 12px; color: #646970; }
+.si-dash__foot { margin: 10px 0 0; padding: 0 12px; }
+.si-dash__foot .count { color: #646970; }
+
+/* ---------------------------------------------------------------- 列表列宽 */
+/* 列表列宽：来源是「英文标题（表单类型）」，默认宽度会折成两行 */
+.fixed .column-inquiry_no{width:150px;}
+.fixed .column-inquiry_email{width:180px;overflow-wrap:anywhere;}
+.fixed .column-inquiry_source{width:20%;}
+.fixed .column-inquiry_attachments{width:13%;}
+.fixed .column-inquiry_mail{width:170px;}
+.eln-mail-status{display:inline-block;}
+.eln-mail-item{display:block;font-size:12px;line-height:1.9;color:#50575e;white-space:nowrap;}
+.eln-mail-dot{display:inline-block;width:9px;height:9px;margin-right:6px;border-radius:50%;vertical-align:-1px;}
+.eln-mail-dot.is-ok{background:#00a32a;}
+.eln-mail-dot.is-fail{background:#d63638;}
+.eln-mail-dot.is-none{box-shadow:inset 0 0 0 1.5px #c3c4c7;}

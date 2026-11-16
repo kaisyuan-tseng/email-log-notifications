@@ -1,0 +1,26 @@
+{
+  "name": "kaisyuan-tseng/email-log-notifications",
+  "description": "WordPress plugin for inquiry notifications and email delivery logs.",
+  "type": "wordpress-plugin",
+  "license": "GPL-2.0-or-later",
+  "require": {
+    "php": ">=8.0"
+  },
+  "require-dev": {
+    "squizlabs/php_codesniffer": "^3.10",
+    "wp-coding-standards/wpcs": "^3.1",
+    "phpcompatibility/phpcompatibility-wp": "^2.1",
+    "dealerdirect/phpcodesniffer-composer-installer": "^1.0",
+    "php-stubs/wordpress-stubs": "^6.6"
+  },
+  "config": {
+    "allow-plugins": {
+      "dealerdirect/phpcodesniffer-composer-installer": true
+    }
+  },
+  "scripts": {
+    "lint": "phpcs",
+    "lint:fix": "phpcbf",
+    "pot": "wp i18n make-pot . languages/email-log-notifications.pot --domain=email-log-notifications --exclude=vendor,node_modules,languages --skip-audit"
+  }
+}
